@@ -11,7 +11,7 @@ import subprocess
 
 import conda.config as cc
 # noqa here because PY3 is used only on windows, and trips up flake8 otherwise.
-from conda.compat import text_type, PY3  # noqa
+from conda.compat import iteritems, text_type, PY3  # noqa
 
 from conda_build import external
 from conda_build import source
@@ -180,8 +180,8 @@ def get_dict(m=None, prefix=None, dirty=False):
     # features
     d.update({feat.upper(): str(int(value)) for feat, value in
               feature_list})
-    d.update({ket.upper(): str(int(value)) for key, value in
-              iteritems(get_features)})
+    d.update({key.upper(): str(int(value)) for key, value in
+              iteritems(get_features())})
 
     return d
 
