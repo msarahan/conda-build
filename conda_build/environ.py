@@ -18,6 +18,7 @@ from conda_build import source
 from conda_build import utils
 from conda_build.config import config
 from conda_build.features import feature_list
+from conda_build.metadata import get_features
 from conda_build.scripts import prepend_bin_path
 
 
@@ -179,6 +180,8 @@ def get_dict(m=None, prefix=None, dirty=False):
     # features
     d.update({feat.upper(): str(int(value)) for feat, value in
               feature_list})
+    d.update({ket.upper(): str(int(value)) for key, value in
+              iteritems(get_features)})
 
     return d
 

@@ -30,6 +30,26 @@ from conda_build.config import config
 from conda_build.utils import comma_join
 
 
+
+@memoized
+def get_features():
+    """
+    Returns a dict mapping feature names to booleans, corresponding to
+    environment variables starting with 'FEATURE_'.  For example having
+    FEATURE_A=1 and FEATURE_B=0 will return {'a': True, 'b': False}
+    """
+    sel_pat = re.compile('FEATURE_(\w+)')
+    res = {}
+    for key, value in iteritems(os.environ):
+        m = sel_pat.match(key)
+        if m:
+            if value not in ('0', '1'):
+                sys.exit("Error: did not expect environment variable '%s' "
+                         "being set to '%s' (not '0' or '1')" % (key, value))
+            res[m.group(1).lower()] = bool(int(value))
+    return res
+
+
 def ns_cfg():
     # Remember to update the docs of any of this changes
     plat = cc.subdir
@@ -70,15 +90,8 @@ def ns_cfg():
 
     for feature, value in feature_list:
         d[feature] = value
-    sel_pat = re.compile('SELECTOR_(\w+)')
-    for key, value in iteritems(os.environ):
-        m = sel_pat.match(key)
-        if m:
-            if value not in ('0', '1'):
-                sys.exit("Error: did not expect environment variable '%s' "
-                         "being set to '%s' (not '0' or '1')" % (key, value))
-            d[m.group(1)] = bool(int(value))
 
+    d.update(get_features())
     d.update(os.environ)
     return d
 
