@@ -454,14 +454,16 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
         if post in [False, None]:
             print("Removing old build environment")
             print("BUILD START:", m.dist())
-            if on_win:
-                if isdir(config.short_build_prefix):
-                    move_to_trash(config.short_build_prefix, '')
-                if isdir(config.long_build_prefix):
-                    move_to_trash(config.long_build_prefix, '')
-            else:
-                rm_rf(config.short_build_prefix)
-                rm_rf(config.long_build_prefix)
+
+            if not dirty:
+                if on_win:
+                    if isdir(config.short_build_prefix):
+                        move_to_trash(config.short_build_prefix, '')
+                    if isdir(config.long_build_prefix):
+                        move_to_trash(config.long_build_prefix, '')
+                else:
+                    rm_rf(config.short_build_prefix)
+                    rm_rf(config.long_build_prefix)
 
             # Display the name only
             # Version number could be missing due to dependency on source info.
@@ -472,12 +474,19 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
                 # Execute any commands fetching the source (e.g., git) in the _build environment.
                 # This makes it possible to provide source fetchers (eg. git, hg, svn) as build
                 # dependencies.
-                m, need_source_download = parse_or_try_download(m,
-                                                                no_download_source=False,
-                                                                force_download=True,
-                                                                verbose=verbose,
-                                                                dirty=dirty)
-                assert not need_source_download, "Source download failed.  Please investigate."
+
+                _old_path = os.environ['PATH']
+                try:
+                    os.environ['PATH'] = prepend_bin_path({'PATH': _old_path},
+                                                            config.build_prefix)['PATH']
+                    m, need_source_download = parse_or_try_download(m,
+                                                                    no_download_source=False,
+                                                                    force_download=True,
+                                                                    verbose=verbose,
+                                                                    dirty=dirty)
+                    assert not need_source_download, "Source download failed.  Please investigate."
+                finally:
+                    os.environ['PATH'] = _old_path
 
             if m.name() in [i.rsplit('-', 2)[0] for i in linked(config.build_prefix)]:
                 print("%s is installed as a build dependency. Removing." %
