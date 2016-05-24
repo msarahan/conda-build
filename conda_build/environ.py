@@ -181,6 +181,7 @@ def get_dict(m=None, prefix=None, dirty=False):
     d.update({feat.upper(): str(int(value)) for feat, value in
               feature_list})
     d.update({key.upper(): str(int(value)) for key, value in
+    d.update({'FEATURE_%s' % key.upper(): str(int(value)) for key, value in
               iteritems(get_features())})
 
     return d
