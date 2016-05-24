@@ -20,7 +20,7 @@ import mmap
 import conda.config as cc
 import conda.plan as plan
 from conda.api import get_index
-from conda.compat import PY3
+from conda.compat import PY3, iteritems
 from conda.fetch import fetch_index
 from conda.install import prefix_placeholder, linked, move_to_trash, symlink_conda
 from conda.lock import Locked
@@ -40,6 +40,7 @@ from conda_build.create_test import (create_files, create_shell_files,
                                      create_py_files, create_pl_files)
 from conda_build.exceptions import indent
 from conda_build.features import feature_list
+from conda_build.metadata import get_features
 
 
 on_win = (sys.platform == 'win32')
@@ -345,7 +346,11 @@ def create_env(prefix, specs, clear_cache=True):
     Create a conda envrionment for the given prefix and specs.
     '''
     specs = list(specs)
+<<<<<<< HEAD
     for feature, value in feature_list:
+=======
+    for feature, value in iteritems(get_features()):
+>>>>>>> track features
         if value:
             specs.append('%s@' % feature)
 
