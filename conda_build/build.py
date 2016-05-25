@@ -452,18 +452,17 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
                     shutil.move(os.path.join(source.WORK_DIR, old_sub), old_WORK_DIR)
 
         if post in [False, None]:
-            print("Removing old build environment")
             print("BUILD START:", m.dist())
 
-            if not dirty:
-                if on_win:
-                    if isdir(config.short_build_prefix):
-                        move_to_trash(config.short_build_prefix, '')
-                    if isdir(config.long_build_prefix):
-                        move_to_trash(config.long_build_prefix, '')
-                else:
-                    rm_rf(config.short_build_prefix)
-                    rm_rf(config.long_build_prefix)
+            print("Removing old build environment")
+            if on_win:
+                if isdir(config.short_build_prefix):
+                    move_to_trash(config.short_build_prefix, '')
+                if isdir(config.long_build_prefix):
+                    move_to_trash(config.long_build_prefix, '')
+            else:
+                rm_rf(config.short_build_prefix)
+                rm_rf(config.long_build_prefix)
 
             # Display the name only
             # Version number could be missing due to dependency on source info.
