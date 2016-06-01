@@ -391,7 +391,7 @@ def provide(recipe_dir, meta, verbose=False, patch=True, dirty=False):
         else:
             rm_rf(WORK_DIR)
 
-    if not os.path.exists(WORK_DIR):
+    if not dirty or not os.path.isdir(WORK_DIR):
         if any(k in meta for k in ('fn', 'url')):
             unpack(meta, verbose=verbose)
         elif 'git_url' in meta:
@@ -407,7 +407,8 @@ def provide(recipe_dir, meta, verbose=False, patch=True, dirty=False):
                 print("Copying %s to %s" % (abspath(join(recipe_dir, meta.get('path'))), WORK_DIR))
             copytree(abspath(join(recipe_dir, meta.get('path'))), WORK_DIR)
         else:  # no source
-            os.makedirs(WORK_DIR)
+            if not isdir(WORK_DIR):
+                os.makedirs(WORK_DIR)
 
         if patch:
             src_dir = get_dir()

@@ -77,6 +77,7 @@ def bldpkg_path(m):
 
 def parse_or_try_download(metadata, no_download_source, verbose,
                           force_download=False, dirty=False):
+
     if (force_download or (not no_download_source and
                            any(var.startswith('GIT_') for var in metadata.undefined_jinja_vars))):
         # this try/catch is for when the tool to download source is actually in

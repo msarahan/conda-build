@@ -14,7 +14,6 @@ from conda.cli.common import specs_from_url
 from conda_build import exceptions
 from conda_build.features import feature_list
 
-
 try:
     import yaml
 
