@@ -317,6 +317,21 @@ def _ensure_unix_line_endings(path):
     return out_path
 
 
+def _commonpath(paths):
+    """Python 2 doesn't have os.path.commonpath(), so roll our own"""
+    folders = [path.split(b'/') for path in paths]
+    minfolders = min(folders)
+    maxfolders = max(folders)
+    common = []
+    for minf, maxf in zip(minfolders, maxfolders[:len(minfolders)]):
+        if minf != maxf:
+            break
+        common.append(minf)
+    if len(common):
+        return b'/'.join(common) + b'/'
+    return b''
+
+
 def _guess_patch_strip_level(filesstr, src_dir):
     """ Determine the patch strip level automatically. """
     maxlevel = None
