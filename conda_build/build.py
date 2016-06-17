@@ -473,6 +473,7 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
             # this modifies os.environ in place, and provides a diff of variables to actually
             #    include in the build environment later
             # Keeping all environment variables would defeat some isolation that we want.
+            current_env = os.getenv("CONDA_DEFAULT_ENV", None)
             env_diff = activate_env(config.build_prefix)
 
             if need_source_download:
@@ -555,7 +556,10 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
 
         # this is necessary to return our current os.environ to normal.
         #    We are discarding the list of changed values.
-        deactivate_env()
+        if current_env:
+            activate_env(current_env)
+        else:
+            deactivate_env()
 
         if post in [True, None]:
             if post:
@@ -690,6 +694,7 @@ def test(m, move_broken=True):
             specs += ['lua %s*' % environ.get_lua_ver()]
 
         create_env(config.test_prefix, specs)
+        current_env = os.getenv("CONDA_DEFAULT_ENV", None)
         env_diff = activate_env(config.test_prefix)
 
         env = dict(os.environ)
@@ -750,7 +755,10 @@ def test(m, move_broken=True):
 
         # this is necessary to return our current os.environ to normal.
         #    We are discarding the list of changed values.
-        deactivate_env()
+        if current_env:
+            activate_env(current_env)
+        else:
+            deactivate_env()
 
     print("TEST END:", m.dist())
 
