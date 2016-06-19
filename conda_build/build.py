@@ -5,6 +5,7 @@ from __future__ import absolute_import, division, print_function
 
 import io
 import json
+import logging
 import os
 import shutil
 import stat
@@ -52,6 +53,8 @@ else:
 channel_urls = ()
 override_channels = False
 verbose = True
+
+log = logging.getLogger(__file__)
 
 
 def prefix_files():
@@ -464,16 +467,26 @@ def build(m, post=None, include_recipe=True, keep_old_work=False,
                 rm_rf(config.short_build_prefix)
                 rm_rf(config.long_build_prefix)
 
+            specs = [ms.spec for ms in m.ms_depends('build')]
+            if activate:
+                # If we activate the build envrionment, we need to be sure that we
+                #    have the appropriate VCS available in the environment.  People
+                #    are not used to explicitly listing it in recipes, though.
+                #    We add it for them here, but warn them about it.
+                vcs_source = m.uses_vcs()
+                if vcs_source and vcs_source not in specs:
+                    specs.append(vcs_source)
+                    log.warn("Your recipe depends on {} at build time (for templates), "
+                            "but you have not listed it as a build dependency.  Doing so for"
+                            " this build.")
             # Display the name only
             # Version number could be missing due to dependency on source info.
-            create_env(config.build_prefix,
-                    [ms.spec for ms in m.ms_depends('build')])
+            create_env(config.build_prefix, specs)
 
             if need_source_download:
                 # Execute any commands fetching the source (e.g., git) in the _build environment.
                 # This makes it possible to provide source fetchers (eg. git, hg, svn) as build
                 # dependencies.
-
                 _old_path = os.environ['PATH']
                 try:
                     os.environ['PATH'] = prepend_bin_path({'PATH': _old_path},
