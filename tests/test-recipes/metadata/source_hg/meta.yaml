@@ -3,8 +3,8 @@ package:
   version: 1.0
 
 source:
-  hg_url: https://bitbucket.org/asmeurer/conda-build-hg-test
-  hg_tag: test
+  hg_url: https://bitbucket.org/condabuild/conda-build-hg-test
+  hg_tag: some-branch
 
 requirements:
   build:

@@ -1,7 +1,6 @@
 # We test the environment variables in a different recipe
 
-# Ensure we are in a git repo
+# Ensure we are in a hg repo
 [ -d .hg ]
 hg id
-[ "$(hg id)" = "6364a674cc15 test" ]
-[ -e test ]
+[ "$(hg id)" = "0d15c0b5fc78 (some-branch) tip" ]
