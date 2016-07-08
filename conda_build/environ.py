@@ -187,7 +187,7 @@ def conda_build_vars(prefix, dirty):
     return {
         'CONDA_BUILD': '1',
         'PYTHONNOUSERSITE': '1',
-        'CONDA_DEFAULT_ENV': config.build_prefix,
+        'CONDA_PREFIX': config.build_prefix,
         'ARCH': str(cc.bits),
         'PREFIX': prefix,
         'SYS_PREFIX': sys.prefix,
