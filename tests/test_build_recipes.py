@@ -548,3 +548,11 @@ def test_early_abort():
     output = output.decode('utf-8')
     error = error.decode('utf-8')
     assert "Hello World" in output, error
+
+
+def test_jinja_next_build_number_file():
+    cmd = 'conda build --output {}'.format(os.path.join(metadata_dir,
+                                                        "_jinja_next_build_num_file"))
+    output = subprocess.check_output(cmd.split())
+    output = output.decode('utf-8').rstrip()
+    assert os.path.basename(output) == 'jinja-next-build-num-file-1.0.0-2.tar.bz2'

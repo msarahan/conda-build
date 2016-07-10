@@ -1,0 +1,11 @@
+{% set build_number=next_build_number("__conda_version__.txt") %}
+
+package:
+  name: jinja-next-build-num-file
+  version: 1.0.0
+
+source:
+  path: src/
+
+build:
+  number: {{ build_number }}

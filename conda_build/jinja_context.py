@@ -1,19 +1,17 @@
-'''
-Created on Jan 16, 2014
-
-@author: sean
-'''
 from __future__ import absolute_import, division, print_function
 
+from functools import partial
 import json
 import os
-from functools import partial
+import re
+import subprocess
 
 import jinja2
 
 from conda.compat import PY3
 from .environ import get_dict as get_environ
 from .metadata import select_lines, ns_cfg
+from .source import WORK_DIR
 
 _setuptools_data = None
 
@@ -113,6 +111,51 @@ def load_setuptools(setup_file='setup.py', from_recipe_dir=False,
     return _setuptools_data
 
 
+def _get_build_number_from_file(filename):
+    # build is always 0 - but may change below.
+    number = 0
+    if not os.path.isabs(filename):
+        filename = os.path.join(os.path.abspath(os.path.join(WORK_DIR, filename)))
+    if os.path.isfile(filename):
+        try:
+            value = open(filename).read()
+            number = int(value)
+        except ValueError:
+            log.warn("Invalid value for build number ({0}) in {1}".format(value, filename))
+        except IOError:
+            log.warn("Could not open file {0} for reading build number".format(filename))
+    return number
+
+
+def _get_build_number_from_repo(metadata):
+    # this is pretty vile, but conda doesn't really have an API for this.
+    #    Revisit when conda might have this.
+    # Idea is that we need to know which package conda would choose to install, and base our
+    #    decision of what to base our build number on using that.
+    cmd = "conda create -n noenv --dry-run {0} {1}".format(metadata.name() + "=" + metadata.version(),
+                                                           metadata.ms_depends('build'))
+    try:
+        output = subprocess.check_output(cmd.split())
+        # find pattern:
+        m = re.search("{packagename}:\s+{version}-?(?:[^-_]*)?[-_]([0-9]{1,4})\s+".format(
+            packagename=metadata.name,
+            version=metadata.version),
+                      output, re.M | re.I)
+        number = int(m.groups()[0])
+    except subprocess.CalledProcessError:
+        # if package does not exist, we are implicitly at build number 0
+        number = 0
+    return number
+
+
+def next_build_number(filename=None, metadata=None):
+    if filename:
+        number = _get_build_number_from_file(filename)
+    else:
+        number = _get_build_number_from_repo(metadata)
+    return number
+
+
 def load_npm():
     # json module expects bytes in Python 2 and str in Python 3.
     mode_dict = {'mode': 'r', 'encoding': 'utf-8'} if PY3 else {'mode': 'rb'}
@@ -133,5 +176,6 @@ def context_processor(initial_metadata, recipe_dir):
 
     ctx.update(load_setuptools=partial(load_setuptools, recipe_dir=recipe_dir),
                load_npm=load_npm,
+               next_build_number=partial(next_build_number, metadata=initial_metadata),
                environ=environ)
     return ctx

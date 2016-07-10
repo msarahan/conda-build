@@ -1,0 +1,8 @@
+{% set build_number=next_build_number() %}
+
+package:
+  name: jinja-next-build-num-repo
+  version: 1.0.0
+
+build:
+  number: {{ build_number }}
