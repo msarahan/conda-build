@@ -748,7 +748,9 @@ def test(m, move_broken=True, activate=True):
             if activate:
                 source = "call " if on_win else "source "
                 ext = ".bat" if on_win else ""
+                tf.write("echo %CONDA_DEFAULT_ENV%")
                 tf.write("{source}activate{ext} _test\n".format(source=source, ext=ext))
+                tf.write("echo %CONDA_DEFAULT_ENV%")
             if py_files:
                 tf.write("{python} -s {test_file}\n".format(
                     python=config.test_python,
