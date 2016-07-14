@@ -365,7 +365,7 @@ def create_env(prefix, specs, clear_cache=True):
         cc.pkgs_dirs = cc.pkgs_dirs[:1]
         actions = plan.install_actions(prefix, index, specs)
         plan.display_actions(actions, index)
-        plan.execute_actions(actions, index, verbose=verbose)
+        plan.execute_actions(actions, index, verbose=True)
     # ensure prefix exists, even if empty, i.e. when specs are empty
     if not isdir(prefix):
         os.makedirs(prefix)
