@@ -363,6 +363,8 @@ def create_env(prefix, specs, clear_cache=True):
         warn_on_old_conda_build(index)
 
         cc.pkgs_dirs = cc.pkgs_dirs[:1]
+        logging.disable(logging.NOTSET)
+        logging.basicConfig(level=logging.DEBUG)
         actions = plan.install_actions(prefix, index, specs)
         plan.display_actions(actions, index)
         plan.execute_actions(actions, index, verbose=True)
