@@ -24,3 +24,10 @@ sub_commands = [
 ]
 
 logging.basicConfig(level=logging.INFO)
+# This squelches a ton of conda output that is not hugely relevant
+logging.getLogger("conda.install").setLevel(logging.ERROR)
+logging.getLogger("fetch").setLevel(logging.WARN)
+logging.getLogger("print").setLevel(logging.WARN)
+logging.getLogger("progress").setLevel(logging.WARN)
+logging.getLogger("dotupdate").setLevel(logging.WARN)
+logging.getLogger("requests.packages.urllib3.connectionpool").setLevel(logging.WARN)
