@@ -10,5 +10,10 @@ MANIFEST
 ve
 venv
 junit.xml
+<<<<<<< HEAD
 .cache
 .DS_Store
+=======
+.DS_Store
+.cache
+>>>>>>> ilastik-customization

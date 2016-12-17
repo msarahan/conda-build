@@ -6,6 +6,10 @@
 
 from __future__ import absolute_import, division, print_function
 
+import copy
+import functools
+from glob import glob
+import json
 from locale import getpreferredencoding
 import os
 from os.path import isdir, isfile, abspath
@@ -16,10 +20,10 @@ import tempfile
 
 import yaml
 
-from .conda_interface import PY3
+from .conda_interface import PY3, envs_dirs
 
 from conda_build import exceptions, utils
-from conda_build.metadata import MetaData
+from conda_build.metadata import MetaData, parse
 import conda_build.source as source
 from conda_build.completers import all_versions, conda_version
 from conda_build.utils import rm_rf
@@ -73,6 +77,69 @@ def bldpkg_path(m):
     return os.path.join(os.path.dirname(m.config.bldpkgs_dir), output_dir, '%s.tar.bz2' % m.dist())
 
 
+def _scan_metadata(path):
+    '''
+    Scan all json files in 'path' and return a dictionary with their contents.
+    Files are assumed to be in 'index.json' format.
+    '''
+    installed = dict()
+    for filename in glob(os.path.join(path, '*.json')):
+        with open(filename) as file:
+            data = json.load(file)
+            installed[data['name']] = data
+    return installed
+
+
+# This really belongs in conda, and it is int conda.cli.common,
+#   but we don't presently have an API there.
+def _get_env_path(env_name):
+    if os.path.isdir(env_name):
+        return env_name
+    for envs_dir in envs_dirs + [os.getcwd()]:
+        path = os.path.join(envs_dir, env_name)
+        if os.path.isdir(path):
+            return path
+    return None
+
+
+def add_build_config(metadata, build_config_or_bootstrap):
+    if not build_config_or_bootstrap:
+        return metadata
+    # don't modify it in place.
+    metadata = copy.deepcopy(metadata)
+    path = _get_env_path(build_config_or_bootstrap)
+    # concatenate build requirements from the build config file to the build
+    # requirements from the recipe
+    if os.path.isfile(build_config_or_bootstrap):
+        try:
+            with open(build_config_or_bootstrap) as configfile:
+                build_config = parse(configfile.read())
+            metadata.meta['requirements']['build'] += build_config['requirements']['build']
+        except Exception as e:
+            print("Unable to read config file '%s':" % build_config_or_bootstrap)
+            print(e)
+            sys.exit(1)
+    elif path:
+        # construct build requirements that replicate the given bootstrap environment
+        # and concatenate them to the build requirements from the recipe
+        bootstrap_metadir = os.path.join(path, 'conda-meta')
+        if not isdir(bootstrap_metadir):
+            print("Bootstrap environment '%s' not found" % build_config_or_bootstrap)
+            sys.exit(1)
+        bootstrap_metadata = _scan_metadata(bootstrap_metadir)
+        bootstrap_requirements = []
+        for package, data in bootstrap_metadata.items():
+            bootstrap_requirements.append("%s %s %s" % (package, data['version'], data['build']))
+        metadata.meta['requirements']['build'] += bootstrap_requirements
+    return metadata
+
+
+def _jinja_config(config, jinja_env):
+    # make all metadata from build_prefix/conda-meta/*.json available to
+    # jinja in a dictionary 'installed'
+    jinja_env.globals['installed'] = _scan_metadata(os.path.join(config.build_prefix, 'conda-meta'))
+
+
 def parse_or_try_download(metadata, no_download_source, config,
                           force_download=False):
 
@@ -86,7 +153,8 @@ def parse_or_try_download(metadata, no_download_source, config,
                     source.provide(metadata.path, metadata.get_section('source'), config=config)
                 need_source_download = False
             try:
-                metadata.parse_again(config=config, permit_undefined_jinja=False)
+                metadata.parse_again(permit_undefined_jinja=False,
+                                     jinja_config=functools.partial(_jinja_config, config=config))
             except (ImportError, exceptions.UnableToParseMissingSetuptoolsDependencies):
                 need_reparse_in_env = True
         except subprocess.CalledProcessError as error:

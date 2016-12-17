@@ -51,7 +51,7 @@ from .conda_interface import EntityEncoder
 from conda_build import __version__
 from conda_build import environ, source, tarcheck
 from conda_build.render import (parse_or_try_download, output_yaml, bldpkg_path,
-                                render_recipe, reparse)
+                                render_recipe, reparse, _scan_metadata)
 import conda_build.os_utils.external as external
 from conda_build.post import (post_process, post_build,
                               fix_permissions, get_build_metadata)
