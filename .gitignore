@@ -9,3 +9,6 @@ tags
 MANIFEST
 ve
 venv
+junit.xml
+.DS_Store
+.cache
