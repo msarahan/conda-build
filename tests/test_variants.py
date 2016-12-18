@@ -33,9 +33,13 @@ def test_later_spec_priority():
 
 def test_get_package_variants(test_config):
     with tempfile.NamedTemporaryFile() as f:
-        test_config.variant_config_files = [f.name]
+        fname = f.name
+        if hasattr(fname, 'encode'):
+            fname = fname.encode()
+        test_config.variant_config_files = [fname]
         test_config.ignore_system_config = True
-        yaml.dump(global_specs, f)
+        with open(fname, 'w') as inner_f:
+            yaml.dump(global_specs, inner_f)
         metadata = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
                                         no_download_source=False, config=test_config)
     # one for each Python version
