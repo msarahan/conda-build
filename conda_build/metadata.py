@@ -395,7 +395,7 @@ def build_string_from_metadata(metadata):
 #   but we don't presently have an API there.
 def _get_env_path(env_name_or_path):
     if not os.path.isdir(env_name_or_path):
-        for envs_dir in envs_dirs + (os.getcwd(), ):
+        for envs_dir in list(envs_dirs) + [os.getcwd()]:
             path = os.path.join(envs_dir, env_name_or_path)
             if os.path.isdir(path):
                 env_name_or_path = path

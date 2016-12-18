@@ -203,6 +203,12 @@ def load_file_regex(config, load_file, regex_pattern, from_recipe_dir=False,
     return match if match else None
 
 
+def pin_compatible():
+    """Query a compatibility database, or just guess about compatibility based on semantic
+    versioning.  Returns string with guess about compatible pinning."""
+    pass
+
+
 def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jinja):
     """
     Return a dictionary to use as context for jinja templates.
