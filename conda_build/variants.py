@@ -3,6 +3,7 @@ ending up with a configuration matrix"""
 
 from itertools import product
 import os
+import sys
 
 import six
 import yaml
@@ -12,7 +13,7 @@ from conda_build.conda_interface import cc
 
 
 DEFAULT_VARIANTS = {
-    'python': ['3.5', '2.7'],
+    'python': ['{0}.{1}'.format(sys.version_info.major, sys.version_info.minor)],
     'numpy': ['1.11'],
     'perl': ['5.20'],
     'lua': ['5.2'],
@@ -26,14 +27,6 @@ def parse_config_file(path):
     return content
 
 
-def write_default_config_file(path):
-    """Write DEFAULT_VARIANTS to file.
-
-    This function is only called when system config does not yet exist."""
-    with open(path, 'w') as f:
-        yaml.dump(DEFAULT_VARIANTS, f, default_flow_style=False, width=999999999)
-
-
 def find_config_files(metadata, additional_files=None, ignore_system_config=False):
     """Find files to load variables from.  Note that order here determines clobbering.
 
@@ -44,9 +37,8 @@ def find_config_files(metadata, additional_files=None, ignore_system_config=Fals
             system_path = cc.conda_build_config
         else:
             system_path = os.path.join(os.path.expanduser('~'), ".conda_build_config.yaml")
-        if not os.path.isfile(system_path):
-            write_default_config_file(system_path)
-        files.append(system_path)
+        if os.path.isfile(system_path):
+            files.append(system_path)
     recipe_config = os.path.join(metadata.path, ".conda_build_config.yaml")
     if os.path.isfile(recipe_config):
         files.append(recipe_config)
@@ -75,6 +67,8 @@ def get_package_variants(recipe_metadata, config_files=None, ignore_system_confi
     files = find_config_files(recipe_metadata, ensure_list(config_files),
                               ignore_system_config=ignore_system_config)
     specs = [parse_config_file(f) for f in files]
+    if not specs:
+        specs = [DEFAULT_VARIANTS]
     combined_spec = combine_specs(specs)
     matching_subset = set(recipe_metadata.undefined_jinja_vars) & set(combined_spec.keys())
     matching_subset = {key: combined_spec[key] for key in matching_subset}

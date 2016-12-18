@@ -222,15 +222,16 @@ different sets of packages."""
 
 def output_action(recipe, config):
     silence_loggers(show_warnings_and_errors=False)
-    metadata, _, _ = api.render(recipe, config=config)
-    if metadata.skip():
-        print_skip_message(metadata)
-    else:
-        print(bldpkg_path(metadata))
+    metadata_tuples = api.render(recipe, config=config)
+    for (metadata, _, _) in metadata_tuples:
+        if metadata.skip():
+            print_skip_message(metadata)
+        else:
+            print(bldpkg_path(metadata))
 
 
 def source_action(metadata, config):
-    source.provide(metadata.path, metadata.get_section('source'), config=config)
+    source.provide(metadata, config=config)
     print('Source tree in:', config.work_dir)
 
 
@@ -290,15 +291,17 @@ def execute(args):
 
     if action:
         for recipe in args.recipe:
-            action(recipe, config)
+            output = action(recipe, config)
 
     else:
-        api.build(args.recipe, post=args.post, build_only=args.build_only,
-                   notest=args.notest, keep_old_work=args.keep_old_work,
-                   already_built=None, config=config, noverify=args.no_verify)
+        output = api.build(args.recipe, post=args.post, build_only=args.build_only,
+                    notest=args.notest, keep_old_work=args.keep_old_work,
+                    already_built=None, config=config, noverify=args.no_verify)
 
     if not args.output and len(build.get_build_folders(config.croot)) > 0:
         build.print_build_intermediate_warning(config)
+
+    return output
 
 
 def main():

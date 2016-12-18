@@ -470,13 +470,16 @@ def apply_patch(src_dir, path, config, git=None):
             os.remove(patch_args[-1])  # clean up .patch_unix file
 
 
-def provide(recipe_dir, meta, config, patch=True):
+def provide(metadata, config, patch=True):
     """
     given a recipe_dir:
       - download (if necessary)
       - unpack
       - apply patches (if any)
     """
+
+    meta = metadata.get_section('source')
+    recipe_dir = metadata.path
 
     if not os.path.isdir(config.build_folder):
         os.makedirs(config.build_folder)

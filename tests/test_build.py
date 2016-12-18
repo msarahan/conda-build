@@ -64,18 +64,18 @@ def test_env_creation_with_short_prefix_does_not_deadlock(caplog):
     test_base = os.path.expanduser("~/cbtmp")
     config = api.Config(croot=test_base, anaconda_upload=False, verbose=True)
     recipe_path = os.path.join(metadata_dir, "has_prefix_files")
-    metadata, _, _ = api.render(recipe_path, config=config)
-    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix'
-    fn = api.get_output_file_path(metadata)
+    metadata = api.render(recipe_path, config=config)[0][0]
+    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix_deadlock'
+    fn = api.get_output_file_path(metadata)[0]
     if os.path.isfile(fn):
         os.remove(fn)
-    config.prefix_length = 80
+    metadata.config.prefix_length = 80
     try:
         api.build(metadata)
         pkg_name = os.path.basename(fn).replace("-1.0-0.tar.bz2", "")
         assert not api.inspect_prefix_length(fn, 255)
-        config.prefix_length = 255
-        build.create_env(config.build_prefix, specs=["python", pkg_name], config=config)
+        metadata.config.prefix_length = 255
+        build.create_env(config.build_prefix, specs=["python", pkg_name], config=metadata.config)
     except:
         raise
     finally:
@@ -90,12 +90,12 @@ def test_env_creation_with_prefix_fallback_disabled():
     config = api.Config(croot=test_base, anaconda_upload=False, verbose=True,
                         prefix_length_fallback=False)
     recipe_path = os.path.join(metadata_dir, "has_prefix_files")
-    metadata, _, _ = api.render(recipe_path, config=config)
-    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix'
-    fn = api.get_output_file_path(metadata)
+    metadata = api.render(recipe_path, config=config)[0][0]
+    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix_fallback'
+    fn = api.get_output_file_path(metadata)[0]
     if os.path.isfile(fn):
         os.remove(fn)
-    config.prefix_length = 80
+    metadata.config.prefix_length = 80
 
     with pytest.raises((SystemExit, PaddingError, LinkError)):
         api.build(metadata)
@@ -108,7 +108,6 @@ def test_env_creation_with_prefix_fallback_disabled():
 @pytest.mark.skipif(on_win, reason=("Windows binary prefix replacement (for pip exes)"
                                     " not length dependent"))
 def test_catch_openssl_legacy_short_prefix_error(test_metadata, caplog):
-    config = api.Config(anaconda_upload=False, verbose=True, python="2.6")
     test_metadata.config = api.get_or_merge_config(test_metadata.config, python='2.6')
     cmd = """
 import os

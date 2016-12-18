@@ -99,11 +99,9 @@ def test_build_output_build_path_multiple_recipes(testing_workdir, test_config, 
     assert output.rstrip().splitlines() == test_paths, error
 
 def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):
-    recipe_path = os.path.join(metadata_dir, "has_prefix_files" + os.path.sep)
-    fn = api.get_output_file_path(recipe_path, config=test_config)
     args = [os.path.join(metadata_dir, "has_prefix_files"), '--croot', test_config.croot]
-    main_build.execute(args)
-    data = package_has_file(fn, 'binary-has-prefix')
+    outputs = main_build.execute(args)
+    data = package_has_file(outputs[0], 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')
@@ -113,10 +111,8 @@ def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):
 def test_build_no_build_id(testing_workdir, test_config, capfd):
     args = [os.path.join(metadata_dir, "has_prefix_files"), '--no-build-id',
             '--croot', test_config.croot, '--no-activate']
-    main_build.execute(args)
-    fn = api.get_output_file_path(os.path.join(metadata_dir, "has_prefix_files"),
-                                  config=test_config)
-    data = package_has_file(fn, 'binary-has-prefix')
+    outputs = main_build.execute(args)
+    data = package_has_file(outputs[0], 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')
@@ -267,18 +263,15 @@ def test_inspect_prefix_length(testing_workdir, capfd):
     test_base = os.path.expanduser("~/cbtmp")
     config = api.Config(croot=test_base, anaconda_upload=False, verbose=True)
     recipe_path = os.path.join(metadata_dir, "has_prefix_files")
-    fn = api.get_output_file_path(recipe_path, config=config)
-    if os.path.isfile(fn):
-        os.remove(fn)
     config.prefix_length = 80
-    api.build(recipe_path, config=config)
+    outputs = api.build(recipe_path, config=config)
 
-    args = ['prefix-lengths', fn]
+    args = ['prefix-lengths'] + outputs
     with pytest.raises(SystemExit):
         main_inspect.execute(args)
         output, error = capfd.readouterr()
         assert 'Packages with binary prefixes shorter than' in output
-        assert fn in output
+        assert all(fn in output for fn in outputs)
 
     config.prefix_length = 255
     api.build(recipe_path, config=config)
@@ -351,21 +344,20 @@ def test_purge(testing_workdir, test_metadata):
 
     It does not clear out build packages from folders like osx-64 or linux-64.
     """
-    api.build(test_metadata)
-    fn = api.get_output_file_path(test_metadata)
+    outputs = api.build(test_metadata)
     args = ['purge']
     main_build.execute(args)
     assert not get_build_folders(test_metadata.config.croot)
-    assert os.path.isfile(fn)
+    assert all(os.path.isfile(fn) for fn in outputs)
 
 
+@pytest.mark.serial
 def test_purge_all(test_metadata):
     """
     purge-all clears out build folders as well as build packages in the osx-64 folders and such
     """
-    api.build(test_metadata)
-    fn = api.get_output_file_path(test_metadata)
+    outputs = api.build(test_metadata)
     args = ['purge-all', '--croot', test_metadata.config.croot]
     main_build.execute(args)
     assert not get_build_folders(test_metadata.config.croot)
-    assert not os.path.isfile(fn)
+    assert not any(os.path.isfile(fn) for fn in outputs)

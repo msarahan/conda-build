@@ -47,7 +47,7 @@ def get_output_file_path(recipe_path_or_metadata, no_download_source=False, conf
     from conda_build.render import render_recipe, bldpkg_path
     config = get_or_merge_config(config, **kwargs)
     if hasattr(recipe_path_or_metadata, 'config'):
-        metadata = recipe_path_or_metadata
+        metadata = [(recipe_path_or_metadata, None, None)]
     else:
         metadata = render_recipe(recipe_path_or_metadata,
                                  no_download_source=no_download_source,

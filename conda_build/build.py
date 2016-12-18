@@ -51,7 +51,7 @@ from .conda_interface import EntityEncoder
 from conda_build import __version__
 from conda_build import environ, source, tarcheck
 from conda_build.render import (parse_or_try_download, output_yaml, bldpkg_path,
-                                render_recipe, reparse, _scan_metadata)
+                                render_recipe, reparse)
 import conda_build.os_utils.external as external
 from conda_build.post import (post_process, post_build,
                               fix_permissions, get_build_metadata)
@@ -912,15 +912,12 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             # This makes it possible to provide source fetchers (eg. git, hg, svn) as build
             # dependencies.
             with path_prepended(config.build_prefix):
-                m, need_source_download, need_reparse_in_env = parse_or_try_download(m,
-                                                                no_download_source=False,
-                                                                force_download=True,
-                                                                config=config)
-            assert not need_source_download, "Source download failed.  Please investigate."
+                source.provide(m, config)
+            reparse(m, config=config)
             if m.uses_jinja:
                 print("BUILD START (revised):", m.dist())
 
-        if need_reparse_in_env:
+        elif need_reparse_in_env:
             reparse(m, config=config)
             print("BUILD START (revised):", m.dist())
 
@@ -1145,8 +1142,8 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
     need_cleanup = False
 
     if hasattr(recipedir_or_package_or_metadata, 'config'):
-        metadata = recipedir_or_package_or_metadata
-        config = metadata.config
+        metadata_tuples = [(recipedir_or_package_or_metadata, None, None)]
+        config = recipedir_or_package_or_metadata.config
     else:
         recipe_dir, need_cleanup = get_recipe_abspath(recipedir_or_package_or_metadata)
         config.need_cleanup = need_cleanup
@@ -1154,7 +1151,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
         # This will create a new local build folder if and only if config doesn't already have one.
         #   What this means is that if we're running a test immediately after build, we use the one
         #   that the build already provided
-        metadata, _, _ = render_recipe(recipe_dir, config=config)
+        metadata_tuples = render_recipe(recipe_dir, config=config)
         # this recipe came from an extracted tarball.
         if need_cleanup:
             # ensure that the local location of the package is indexed, so that conda can find the
@@ -1173,131 +1170,134 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
             #    how to add elements.
             config.channel_urls = list(config.channel_urls)
             config.channel_urls.insert(0, local_url)
+            metadata = metadata_tuples[0][0]
             if (metadata.meta.get('test') and metadata.meta['test'].get('source_files') and
                     not os.listdir(config.work_dir)):
-                source.provide(metadata.path, metadata.get_section('source'), config=config)
+                source.provide(metadata, config=config)
 
-    config.compute_build_id(metadata.name())
+    for (metadata, _, _) in metadata_tuples:
+        config.compute_build_id(metadata.name())
 
-    clean_pkg_cache(metadata.dist(), config.timeout)
+        clean_pkg_cache(metadata.dist(), config.timeout)
 
-    create_files(config.test_dir, metadata, config)
-    # Make Perl or Python-specific test files
-    if metadata.name().startswith('perl-'):
-        pl_files = create_pl_files(config.test_dir, metadata)
-        py_files = False
-        lua_files = False
-    else:
-        py_files = create_py_files(config.test_dir, metadata)
-        pl_files = False
-        lua_files = False
-    shell_files = create_shell_files(config.test_dir, metadata, config)
-    if not (py_files or shell_files or pl_files or lua_files):
-        print("Nothing to test for:", metadata.dist())
-        return True
+        create_files(config.test_dir, metadata, config)
+        # Make Perl or Python-specific test files
+        if metadata.name().startswith('perl-'):
+            pl_files = create_pl_files(config.test_dir, metadata)
+            py_files = False
+            lua_files = False
+        else:
+            py_files = create_py_files(config.test_dir, metadata)
+            pl_files = False
+            lua_files = False
+        shell_files = create_shell_files(config.test_dir, metadata, config)
+        if not (py_files or shell_files or pl_files or lua_files):
+            print("Nothing to test for:", metadata.dist())
+            continue
 
-    print("TEST START:", metadata.dist())
+        print("TEST START:", metadata.dist())
 
-    # Needs to come after create_files in case there's test/source_files
-    print("Deleting work directory,", config.work_dir)
-    rm_rf(config.work_dir)
+        # Needs to come after create_files in case there's test/source_files
+        print("Deleting work directory,", config.work_dir)
+        rm_rf(config.work_dir)
 
-    get_build_metadata(metadata, config=config)
-    specs = ['%s %s %s' % (metadata.name(), metadata.version(), metadata.build_id())]
+        get_build_metadata(metadata, config=config)
+        specs = ['%s %s %s' % (metadata.name(), metadata.version(), metadata.build_id())]
 
-    # add packages listed in the run environment and test/requires
-    specs.extend(ms.spec for ms in metadata.ms_depends('run'))
-    specs += ensure_list(metadata.get_value('test/requires', []))
+        # add packages listed in the run environment and test/requires
+        specs.extend(ms.spec for ms in metadata.ms_depends('run'))
+        specs += ensure_list(metadata.get_value('test/requires', []))
 
-    if py_files:
-        # as the tests are run by python, ensure that python is installed.
-        # (If they already provided python as a run or test requirement,
-        #  this won't hurt anything.)
-        specs += ['python %s*' % environ.get_py_ver(config)]
-    if pl_files:
-        # as the tests are run by perl, we need to specify it
-        specs += ['perl %s*' % environ.get_perl_ver(config)]
-    if lua_files:
-        # not sure how this shakes out
-        specs += ['lua %s*' % environ.get_lua_ver(config)]
-
-    create_env(config.test_prefix, specs, config=config)
-
-    with path_prepended(config.test_prefix):
-        env = dict(os.environ.copy())
-        env.update(environ.get_dict(config=config, m=metadata, prefix=config.test_prefix))
-        env["CONDA_BUILD_STATE"] = "TEST"
-        if env_path_backup_var_exists:
-            env["CONDA_PATH_BACKUP"] = os.environ["CONDA_PATH_BACKUP"]
-
-    if not config.activate:
-        # prepend bin (or Scripts) directory
-        env = prepend_bin_path(env, config.test_prefix, prepend_prefix=True)
-
-        if on_win:
-            env['PATH'] = config.test_prefix + os.pathsep + env['PATH']
-
-    for varname in 'CONDA_PY', 'CONDA_NPY', 'CONDA_PERL', 'CONDA_LUA':
-        env[varname] = str(getattr(config, varname) or '')
-
-    # Python 2 Windows requires that envs variables be string, not unicode
-    env = {str(key): str(value) for key, value in env.items()}
-    suffix = "bat" if on_win else "sh"
-    test_script = join(config.test_dir, "conda_test_runner.{suffix}".format(suffix=suffix))
-
-    with open(test_script, 'w') as tf:
-        if config.activate:
-            ext = ".bat" if on_win else ""
-            tf.write('{source} "{conda_root}activate{ext}" "{test_env}" {squelch}\n'.format(
-                conda_root=root_script_dir + os.path.sep,
-                source="call" if on_win else "source",
-                ext=ext,
-                test_env=config.test_prefix,
-                squelch=">nul 2>&1" if on_win else "&> /dev/null"))
-            if on_win:
-                tf.write("if errorlevel 1 exit 1\n")
         if py_files:
-            tf.write("{python} -s {test_file}\n".format(
-                python=config.test_python,
-                test_file=join(config.test_dir, 'run_test.py')))
-            if on_win:
-                tf.write("if errorlevel 1 exit 1\n")
+            # as the tests are run by python, ensure that python is installed.
+            # (If they already provided python as a run or test requirement,
+            #  this won't hurt anything.)
+            specs += ['python %s*' % environ.get_py_ver(config)]
         if pl_files:
-            tf.write("{perl} {test_file}\n".format(
-                perl=config.test_perl,
-                test_file=join(config.test_dir, 'run_test.pl')))
-            if on_win:
-                tf.write("if errorlevel 1 exit 1\n")
+            # as the tests are run by perl, we need to specify it
+            specs += ['perl %s*' % environ.get_perl_ver(config)]
         if lua_files:
-            tf.write("{lua} {test_file}\n".format(
-                lua=config.test_lua,
-                test_file=join(config.test_dir, 'run_test.lua')))
+            # not sure how this shakes out
+            specs += ['lua %s*' % environ.get_lua_ver(config)]
+
+        create_env(config.test_prefix, specs, config=config)
+
+        with path_prepended(config.test_prefix):
+            env = dict(os.environ.copy())
+            env.update(environ.get_dict(config=config, m=metadata, prefix=config.test_prefix))
+            env["CONDA_BUILD_STATE"] = "TEST"
+            if env_path_backup_var_exists:
+                env["CONDA_PATH_BACKUP"] = os.environ["CONDA_PATH_BACKUP"]
+
+        if not config.activate:
+            # prepend bin (or Scripts) directory
+            env = prepend_bin_path(env, config.test_prefix, prepend_prefix=True)
+
             if on_win:
-                tf.write("if errorlevel 1 exit 1\n")
-        if shell_files:
-            test_file = join(config.test_dir, 'run_test.' + suffix)
-            if on_win:
-                tf.write("call {test_file}\n".format(test_file=test_file))
+                env['PATH'] = config.test_prefix + os.pathsep + env['PATH']
+
+        for varname in 'CONDA_PY', 'CONDA_NPY', 'CONDA_PERL', 'CONDA_LUA':
+            env[varname] = str(getattr(config, varname) or '')
+
+        # Python 2 Windows requires that envs variables be string, not unicode
+        env = {str(key): str(value) for key, value in env.items()}
+        suffix = "bat" if on_win else "sh"
+        test_script = join(config.test_dir, "conda_test_runner.{suffix}".format(suffix=suffix))
+
+        with open(test_script, 'w') as tf:
+            if config.activate:
+                ext = ".bat" if on_win else ""
+                tf.write('{source} "{conda_root}activate{ext}" "{test_env}" {squelch}\n'.format(
+                    conda_root=root_script_dir + os.path.sep,
+                    source="call" if on_win else "source",
+                    ext=ext,
+                    test_env=config.test_prefix,
+                    squelch=">nul 2>&1" if on_win else "&> /dev/null"))
                 if on_win:
                     tf.write("if errorlevel 1 exit 1\n")
-            else:
-                # TODO: Run the test/commands here instead of in run_test.py
-                tf.write("{shell_path} -x -e {test_file}\n".format(shell_path=shell_path,
-                                                                    test_file=test_file))
+            if py_files:
+                tf.write("{python} -s {test_file}\n".format(
+                    python=config.test_python,
+                    test_file=join(config.test_dir, 'run_test.py')))
+                if on_win:
+                    tf.write("if errorlevel 1 exit 1\n")
+            if pl_files:
+                tf.write("{perl} {test_file}\n".format(
+                    perl=config.test_perl,
+                    test_file=join(config.test_dir, 'run_test.pl')))
+                if on_win:
+                    tf.write("if errorlevel 1 exit 1\n")
+            if lua_files:
+                tf.write("{lua} {test_file}\n".format(
+                    lua=config.test_lua,
+                    test_file=join(config.test_dir, 'run_test.lua')))
+                if on_win:
+                    tf.write("if errorlevel 1 exit 1\n")
+            if shell_files:
+                test_file = join(config.test_dir, 'run_test.' + suffix)
+                if on_win:
+                    tf.write("call {test_file}\n".format(test_file=test_file))
+                    if on_win:
+                        tf.write("if errorlevel 1 exit 1\n")
+                else:
+                    # TODO: Run the test/commands here instead of in run_test.py
+                    tf.write("{shell_path} -x -e {test_file}\n".format(shell_path=shell_path,
+                                                                        test_file=test_file))
 
-    if on_win:
-        cmd = ['cmd.exe', "/d", "/c", test_script]
-    else:
-        cmd = [shell_path, '-x', '-e', test_script]
-    try:
-        subprocess.check_call(cmd, env=env, cwd=config.test_dir)
-    except subprocess.CalledProcessError:
-        tests_failed(metadata, move_broken=move_broken, broken_dir=config.broken_dir, config=config)
+        if on_win:
+            cmd = ['cmd.exe', "/d", "/c", test_script]
+        else:
+            cmd = [shell_path, '-x', '-e', test_script]
+        try:
+            subprocess.check_call(cmd, env=env, cwd=config.test_dir)
+        except subprocess.CalledProcessError:
+            tests_failed(metadata, move_broken=move_broken, broken_dir=config.broken_dir,
+                         config=config)
 
-    if need_cleanup:
-        rm_rf(recipe_dir)
+        if need_cleanup:
+            rm_rf(recipe_dir)
 
-    print("TEST END:", metadata.dist())
+        print("TEST END:", metadata.dist())
     return True
 
 
@@ -1370,6 +1370,7 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                 config.compute_build_id(metadata.name(), reset=True)
             recipe_parent_dir = ""
             to_build_recursive.append(metadata.name())
+            metadata_tuples = [(metadata, None, None)]
         else:
             recipe_parent_dir = os.path.dirname(recipe)
             recipe = recipe.rstrip("/").rstrip("\\")
@@ -1378,32 +1379,38 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
             #    before downloading happens - or else we lose where downloads are
             if config.set_build_id:
                 config.compute_build_id(os.path.basename(recipe), reset=True)
-            metadata, need_source_download, need_reparse_in_env = render_recipe(recipe,
-                                                                    config=config)
+            # each tuple is:
+            #    metadata, need_source_download, need_reparse_in_env =
+            # We get one tuple per variant
+            metadata_tuples = render_recipe(recipe, config=config)
         if not getattr(config, "noverify", False):
             verifier = Verify()
             ignore_scripts = config.ignore_recipe_verify_scripts if \
                 config.ignore_recipe_verify_scripts else None
             run_scripts = config.run_recipe_verify_scripts if \
                 config.run_recipe_verify_scripts else None
-            verifier.verify_recipe(ignore_scripts=ignore_scripts, run_scripts=run_scripts,
-                                   rendered_meta=metadata.meta, recipe_dir=metadata.path)
+            for m_tuple in metadata_tuples:
+                verifier.verify_recipe(ignore_scripts=ignore_scripts, run_scripts=run_scripts,
+                                    rendered_meta=m_tuple[0].meta, recipe_dir=m_tuple[0].path)
         try:
             with config:
-                packages_from_this = build(metadata, post=post,
-                                           need_source_download=need_source_download,
-                                           need_reparse_in_env=need_reparse_in_env,
-                                           config=config)
-                if not notest and packages_from_this:
-                    for pkg in packages_from_this:
-                        if pkg.endswith('.tar.bz2'):
-                            # we only know how to test conda packages
-                            try:
-                                test(pkg, config=config)
-                            # IOError means recipe was not included with package. metadata instead
-                            except IOError:
-                                test(metadata, config=config)
-                    built_packages.append(pkg)
+                for (metadata, need_source_download, need_reparse_in_env) in metadata_tuples:
+                    packages_from_this = build(metadata, post=post,
+                                            need_source_download=need_source_download,
+                                            need_reparse_in_env=need_reparse_in_env,
+                                            config=config)
+                    if not notest:
+                        for pkg in packages_from_this:
+                            if pkg.endswith('.tar.bz2'):
+                                # we only know how to test conda packages
+                                try:
+                                    test(pkg, config=config)
+                                # IOError means recipe was not included with package. use metadata
+                                except IOError:
+                                    test(metadata, config=config)
+                            built_packages.append(pkg)
+                    else:
+                        built_packages.extend(packages_from_this)
         except (NoPackagesFound, NoPackagesFoundError, Unsatisfiable, CondaValueError) as e:
             error_str = str(e)
             skip_names = ['python', 'r']

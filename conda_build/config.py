@@ -120,6 +120,7 @@ class Config(object):
                   #    recipe.)
                   Setting('append_sections_file', None),
                   Setting('clobber_sections_file', None),
+                  Setting('bootstrap', None),
 
                   # pypi upload settings (twine)
                   Setting('password', None),

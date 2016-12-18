@@ -1,4 +1,5 @@
 import os
+import subprocess
 import unittest
 
 from conda_build.conda_interface import MatchSpec
@@ -123,3 +124,30 @@ def test_clobber_section_data(test_metadata):
     test_metadata.meta['about']['summary'] = 'yep'
     # a field that should stay the same
     test_metadata.meta['about']['home'] = 'sweet home'
+
+
+def test_build_bootstrap_env_by_name(test_metadata):
+    assert not any("git" in pkg for pkg in test_metadata.meta["requirements"]["build"]), test_metadata.meta["requirements"]["build"]
+    try:
+        cmd = "conda create -y -n conda_build_bootstrap_test git"
+        subprocess.check_call(cmd.split())
+        test_metadata.config.bootstrap = "conda_build_bootstrap_test"
+        test_metadata.parse_again()
+        assert any("git" in pkg for pkg in test_metadata.meta["requirements"]["build"]), test_metadata.meta["requirements"]["build"]
+    finally:
+        cmd = "conda remove -y -n conda_build_bootstrap_test --all"
+        subprocess.check_call(cmd.split())
+
+
+def test_build_bootstrap_env_by_path(test_metadata):
+    assert not any("git" in pkg for pkg in test_metadata.meta["requirements"]["build"]), test_metadata.meta["requirements"]["build"]
+    path = os.path.join(thisdir, "conda_build_bootstrap_test")
+    try:
+        cmd = "conda create -y -p {} git".format(path)
+        subprocess.check_call(cmd.split())
+        test_metadata.config.bootstrap = path
+        test_metadata.parse_again()
+        assert any("git" in pkg for pkg in test_metadata.meta["requirements"]["build"]), test_metadata.meta["requirements"]["build"]
+    finally:
+        cmd = "conda remove -y -p {} --all".format(path)
+        subprocess.check_call(cmd.split())

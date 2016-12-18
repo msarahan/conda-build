@@ -5,18 +5,18 @@ import os
 from os.path import isfile, join
 import re
 import sys
-import tempfile
 
 from .conda_interface import iteritems, PY3, text_type
 from .conda_interface import memoized, md5_file
 from .conda_interface import non_x86_linux_machines, platform, arch_name
 from .conda_interface import MatchSpec
 from .conda_interface import specs_from_url
+from .conda_interface import envs_dirs
 
 from conda_build import exceptions
 from conda_build.features import feature_list
 from conda_build.config import Config
-from conda_build.utils import ensure_list, find_recipe, expand_globs
+from conda_build.utils import ensure_list, find_recipe, expand_globs, get_installed_packages
 from conda_build.license_family import ensure_valid_license_family
 
 try:
@@ -391,8 +391,35 @@ def build_string_from_metadata(metadata):
     return "".join(res)
 
 
+# This really belongs in conda, and it is int conda.cli.common,
+#   but we don't presently have an API there.
+def _get_env_path(env_name_or_path):
+    if not os.path.isdir(env_name_or_path):
+        for envs_dir in envs_dirs + (os.getcwd(), ):
+            path = os.path.join(envs_dir, env_name_or_path)
+            if os.path.isdir(path):
+                env_name_or_path = path
+                break
+    bootstrap_metadir = os.path.join(env_name_or_path, 'conda-meta')
+    if not os.path.isdir(bootstrap_metadir):
+        print("Bootstrap environment '%s' not found" % env_name_or_path)
+        sys.exit(1)
+    return env_name_or_path
+
+
+def _get_dependencies_from_environment(env_name_or_path):
+    path = _get_env_path(env_name_or_path)
+    # construct build requirements that replicate the given bootstrap environment
+    # and concatenate them to the build requirements from the recipe
+    bootstrap_metadata = get_installed_packages(path)
+    bootstrap_requirements = []
+    for package, data in bootstrap_metadata.items():
+        bootstrap_requirements.append("%s %s %s" % (package, data['version'], data['build']))
+    return {'requirements': {'build': bootstrap_requirements}}
+
+
 class MetaData(object):
-    def __init__(self, path, config=None):
+    def __init__(self, path, config=None, variant=None):
 
         self.undefined_jinja_vars = []
 
@@ -409,21 +436,6 @@ class MetaData(object):
             self.path = os.path.dirname(self.meta_path)
         self.requirements_path = join(self.path, 'requirements.txt')
 
-        # Check if the file $RECIPE_DIR/jinja_config.py exists and import the
-        # callback function jinja_config(jinja_env) if so.
-        try:
-            callback_filename = os.path.join(path, 'jinja_config.py')
-            if PY3:
-                from importlib.machinery import SourceFileLoader
-                jinja_plugin = SourceFileLoader("jinja_plugin", callback_filename).load_module()
-            else:
-                import imp
-                jinja_plugin = imp.load_source('jinja_plugin', callback_filename)
-        except:
-            self.jinja_config_callback = lambda *x: None
-        else:
-            self.jinja_config_callback = jinja_plugin.jinja_config
-
         # Start with bare-minimum contents so we can call environ.get_dict() with impunity
         # We'll immediately replace these contents in parse_again()
         self.meta = parse("package:\n"
@@ -431,18 +443,21 @@ class MetaData(object):
                           path=self.meta_path,
                           config=self.config)
 
+        if not variant:
+            self.variant = {}
+
         # This is the 'first pass' parse of meta.yaml, so not all variables are defined yet
         # (e.g. GIT_FULL_HASH, etc. are undefined)
         # Therefore, undefined jinja variables are permitted here
         # In the second pass, we'll be more strict. See build.build()
-        self.parse_again(config=config, permit_undefined_jinja=True)
+        self.parse_again(config=config, permit_undefined_jinja=True, variant=variant)
         self.config.disable_pip = self.disable_pip
 
     @property
     def disable_pip(self):
         return 'build' in self.meta and 'disable_pip' in self.meta['build']
 
-    def _append_metadata_sections(self, sections_file, merge, config):
+    def _append_metadata_sections(self, sections_file_or_dict, merge, config):
         """Append to or replace subsections to meta.yaml
 
         This is used to alter input recipes, so that a given requirement or
@@ -450,12 +465,14 @@ class MetaData(object):
         intended for vendors who want to extend existing recipes without
         necessarily removing information. pass merge=False to replace sections.
         """
-        with open(sections_file) as configfile:
-            build_config = parse(configfile.read(), config=config)
+        if hasattr(sections_file_or_dict, 'keys'):
+            build_config = sections_file_or_dict
+        else:
+            with open(sections_file_or_dict) as configfile:
+                build_config = parse(configfile.read(), config=config)
         _merge_or_update_values(self.meta, build_config, merge=merge)
 
-    def parse_again(self, config=None, permit_undefined_jinja=False, jinja_config=lambda *x: None,
-                    variant=None):
+    def parse_again(self, config=None, permit_undefined_jinja=False, variant=None):
         """Redo parsing for key-value pairs that are not initialized in the
         first pass.
 
@@ -464,43 +481,51 @@ class MetaData(object):
 
         permit_undefined_jinja: If True, *any* use of undefined jinja variables will
                                 evaluate to an emtpy string, without emitting an error.
-
-        jinja_config: A function to customize jinja's global namespace. It is called as
-                      `jinja_config(jinja_env)` just before parsing starts.
         """
 
         if not config:
             config = self.config
 
+        if variant:
+            self.variant = variant
+
         os.environ["CONDA_BUILD_STATE"] = "RENDER"
+        append_sections_file = None
+        clobber_sections_file = None
         try:
+            # we sometimes create metadata from dictionaries, in which case we'll have no path
             if self.meta_path:
                 self.meta = parse(self._get_contents(permit_undefined_jinja, config=config,
-                                                        jinja_config=jinja_config, variant=variant),
+                                                        variant=self.variant),
                                     config=config, path=self.meta_path)
 
-            else:
                 if (isfile(self.requirements_path) and
                         not self.meta['requirements']['run']):
                     self.meta.setdefault('requirements', {})
                     run_requirements = specs_from_url(self.requirements_path)
                     self.meta['requirements']['run'] = run_requirements
 
-                append_sections_file = (self.config.append_sections_file or
-                                        os.path.join(self.path, 'recipe_append.yaml'))
-                if not os.path.isfile(append_sections_file):
-                    append_sections_file = None
-                clobber_sections_file = (self.config.clobber_sections_file or
-                                        os.path.join(self.path, 'recipe_clobber.yaml'))
-                if not os.path.isfile(clobber_sections_file):
-                    clobber_sections_file = None
+                append_sections_file = os.path.join(self.path, 'recipe_append.yaml')
+                clobber_sections_file = os.path.join(self.path, 'recipe_clobber.yaml')
 
-                if append_sections_file:
-                    self._append_metadata_sections(append_sections_file, merge=True,
-                                                   config=config)
-                if clobber_sections_file:
-                    self._append_metadata_sections(clobber_sections_file, merge=False,
-                                                   config=config)
+            append_sections_file = self.config.append_sections_file or append_sections_file
+            if append_sections_file and not os.path.isfile(append_sections_file):
+                log.debug('input append sections file did not exist: %s', append_sections_file)
+                append_sections_file = None
+            clobber_sections_file = self.config.clobber_sections_file or clobber_sections_file
+            if clobber_sections_file and not os.path.isfile(clobber_sections_file):
+                log.debug('input clobber sections file did not exist: %s', clobber_sections_file)
+                clobber_sections_file = None
+
+            if append_sections_file:
+                self._append_metadata_sections(append_sections_file, merge=True,
+                                                config=config)
+            if clobber_sections_file:
+                self._append_metadata_sections(clobber_sections_file, merge=False,
+                                                config=config)
+            if self.config.bootstrap:
+                dependencies = _get_dependencies_from_environment(self.config.bootstrap)
+                self._append_metadata_sections(dependencies, merge=True, config=config)
         except:
             raise
         finally:
@@ -535,7 +560,7 @@ class MetaData(object):
         return m
 
     @classmethod
-    def fromdict(cls, metadata, config=None):
+    def fromdict(cls, metadata, config=None, variant=None):
         """
         Create a MetaData object from metadata dict directly.
         """
@@ -547,8 +572,11 @@ class MetaData(object):
 
         if not config:
             config = Config()
+        if not variant:
+            variant = {}
 
         m.config = config
+        m.variant = variant
         m.undefined_jinja_vars = []
 
         return m
@@ -786,7 +814,7 @@ class MetaData(object):
     def skip(self):
         return self.get_value('build/skip', False)
 
-    def _get_contents(self, permit_undefined_jinja, config, jinja_config, variant=None):
+    def _get_contents(self, permit_undefined_jinja, config, variant=None):
         '''
         Get the contents of our [meta.yaml|conda.yaml] file.
         If jinja is installed, then the template.render function is called
@@ -835,8 +863,6 @@ class MetaData(object):
             env.globals.update(variant)
         env.globals.update(context_processor(self, path, config=config,
                                              permit_undefined_jinja=permit_undefined_jinja))
-        jinja_config(env)
-        self.jinja_config_callback(env)
 
         # we write a temporary file, so that we can dynamically replace sections in the meta.yaml
         #     file on disk.  These replaced sections also need to have jinja2 filling in templates.

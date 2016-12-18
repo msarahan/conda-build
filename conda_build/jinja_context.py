@@ -11,6 +11,7 @@ import jinja2
 from .conda_interface import PY3
 from .environ import get_dict as get_environ
 from .metadata import select_lines, ns_cfg
+from .utils import get_installed_packages
 
 log = logging.getLogger(__file__)
 
@@ -222,5 +223,6 @@ def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jin
         load_npm=load_npm,
         load_file_regex=partial(load_file_regex, config=config, recipe_dir=recipe_dir,
                                 permit_undefined_jinja=permit_undefined_jinja),
+        installed=get_installed_packages(os.path.join(config.build_prefix, 'conda-meta')),
         environ=environ)
     return ctx

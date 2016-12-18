@@ -97,7 +97,7 @@ def test_token_upload(testing_workdir):
     with pytest.raises(NotFound):
         show.main(args)
 
-    metadata, _, _ = api.render(empty_sections, activate=False)
+    metadata = api.render(empty_sections, activate=False)[0][0]
     metadata.meta['package']['name'] = '_'.join([metadata.name(), folder_uuid])
     metadata.config.token = args.token
 
@@ -123,7 +123,7 @@ def test_no_anaconda_upload_condarc(service_name, testing_workdir, test_config, 
 
 
 def test_git_describe_info_on_branch(test_config):
-    output = api.get_output_file_path(os.path.join(metadata_dir, "_git_describe_number_branch"))
+    output = api.get_output_file_path(os.path.join(metadata_dir, "_git_describe_number_branch"))[0]
     test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
                              "git_describe_number_branch-1.20.2-1_g82c6ba6.tar.bz2")
     assert test_path == output
@@ -138,8 +138,7 @@ def test_no_include_recipe_config_arg(test_metadata):
     # make sure that it is not there when the command line flag is passed
     test_metadata.config.include_recipe = False
     test_metadata.meta['build_number'] = 2
-    output_file = api.get_output_file_path(test_metadata)
-    api.build(test_metadata)
+    output_file = api.build(test_metadata)[0]
     assert not package_has_file(output_file, "info/recipe/meta.yaml")
 
 
@@ -149,9 +148,7 @@ def test_no_include_recipe_meta_yaml(test_metadata, test_config):
     outputs = api.build(test_metadata)
     assert package_has_file(outputs[0], "info/recipe/meta.yaml")
 
-    output_file = api.get_output_file_path(os.path.join(metadata_dir, '_no_include_recipe'),
-                                           config=test_config)
-    api.build(os.path.join(metadata_dir, '_no_include_recipe'), config=test_config)
+    output_file = api.build(os.path.join(metadata_dir, '_no_include_recipe'), config=test_config)[0]
     assert not package_has_file(output_file, "info/recipe/meta.yaml")
 
 
@@ -165,7 +162,7 @@ def test_early_abort(test_config, capfd):
 
 def test_output_build_path_git_source(testing_workdir, test_config):
     output = api.get_output_file_path(os.path.join(metadata_dir, "source_git_jinja2"),
-                                      config=test_config)
+                                      config=test_config)[0]
     test_path = os.path.join(test_config.croot, test_config.subdir,
                      "conda-build-test-source-git-jinja2-1.20.2-py{}{}_0_g262d444.tar.bz2".format(
                                       sys.version_info.major, sys.version_info.minor))
@@ -193,8 +190,8 @@ def test_relative_path_git_versioning(testing_workdir, test_config):
     cwd = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..',
                                        'conda_build_test_recipe'))
     tag = describe_root(cwd)
-    recipe = os.path.join(metadata_dir, "_source_git_jinja2_relative_path")
-    output = api.get_output_file_path(recipe, config=test_config)
+    output = api.get_output_file_path(os.path.join(metadata_dir, "_source_git_jinja2_relative_path"),
+                                      config=test_config)[0]
     assert tag in output
 
 
@@ -203,7 +200,7 @@ def test_relative_git_url_git_versioning(testing_workdir, test_config):
                                        'conda_build_test_recipe'))
     tag = describe_root(cwd)
     recipe = os.path.join(metadata_dir, "_source_git_jinja2_relative_git_url")
-    output = api.get_output_file_path(recipe, config=test_config)
+    output = api.get_output_file_path(recipe, config=test_config)[0]
     assert tag in output
 
 
@@ -434,7 +431,7 @@ def test_build_metadata_object(test_metadata):
 def test_numpy_setup_py_data(test_config):
     recipe_path = os.path.join(metadata_dir, '_numpy_setup_py_data')
     assert os.path.basename(api.get_output_file_path(recipe_path,
-                            config=test_config, numpy="1.11")) == \
+                            config=test_config, numpy="1.11")[0]) == \
                             "load_setup_py_test-1.0a1-np111py{0}{1}_1.tar.bz2".format(
                                 sys.version_info.major, sys.version_info.minor)
 
@@ -565,7 +562,7 @@ def test_relative_git_url_submodule_clone(testing_workdir):
         os.environ["PATH"] = old_path
         # This will (after one spin round the loop) install and run 'git' with the
         # build env prepended to os.environ[]
-        output = api.get_output_file_path(testing_workdir)
+        output = api.get_output_file_path(testing_workdir)[0]
         assert ("relative_submodules-{}-0".format(tag) in output)
         api.build(testing_workdir)
 
@@ -582,14 +579,14 @@ def test_noarch(testing_workdir):
             ])
         with open(filename, 'w') as outfile:
             outfile.write(yaml.dump(data, default_flow_style=False, width=999999999))
-        output = api.get_output_file_path(testing_workdir)
-        assert ("noarch" in output or not noarch)
-        assert ("noarch" not in output or noarch)
+        output = api.get_output_file_path(testing_workdir)[0]
+        assert (os.path.sep + "noarch" + os.path.sep in output or not noarch)
+        assert (os.path.sep + "noarch" + os.path.sep not in output or noarch)
 
 
 def test_disable_pip(test_config):
     recipe_path = os.path.join(metadata_dir, '_disable_pip')
-    metadata, _, _ = api.render(recipe_path, config=test_config)
+    metadata = api.render(recipe_path, config=test_config)[0][0]
 
     metadata.meta['build']['script'] = 'python -c "import pip"'
     with pytest.raises(SystemExit):
@@ -612,17 +609,14 @@ def test_noarch_none_value(testing_workdir, test_config):
 
 
 def test_noarch_foo_value(test_config):
-    recipe = os.path.join(metadata_dir, "noarch_generic")
-    fn = api.get_output_file_path(recipe, config=test_config)
-    api.build(recipe, config=test_config)
-    metadata = json.loads(package_has_file(fn, 'info/index.json').decode())
+    outputs = api.build(os.path.join(metadata_dir, "noarch_generic"), config=test_config)
+    metadata = json.loads(package_has_file(outputs[0], 'info/index.json').decode())
     assert metadata['noarch'] == "generic"
 
 
 def test_about_json_content(test_metadata):
-    api.build(test_metadata)
-    fn = api.get_output_file_path(test_metadata)
-    about = json.loads(package_has_file(fn, 'info/about.json').decode())
+    outputs = api.build(test_metadata)
+    about = json.loads(package_has_file(outputs[0], 'info/about.json').decode())
     assert 'conda_version' in about and about['conda_version'] == conda.__version__
     assert 'conda_build_version' in about and about['conda_build_version'] == __version__
     assert 'channels' in about and about['channels']
@@ -645,11 +639,9 @@ def test_noarch_python_with_tests(test_config):
 
 
 def test_noarch_python_1(test_config):
-    recipe = os.path.join(metadata_dir, "_noarch_python")
-    fn = api.get_output_file_path(recipe, config=test_config)
-    api.build(recipe, config=test_config)
-    assert package_has_file(fn, 'info/files') is not ''
-    extra = json.loads(package_has_file(fn, 'info/package_metadata.json').decode())
+    outputs = api.build(os.path.join(metadata_dir, "_noarch_python"), config=test_config)
+    assert package_has_file(outputs[0], 'info/files') is not ''
+    extra = json.loads(package_has_file(outputs[0], 'info/package_metadata.json').decode())
     assert 'noarch' in extra
     assert 'entry_points' in extra['noarch']
     assert 'type' in extra['noarch']
@@ -661,11 +653,9 @@ def test_noarch_python_1(test_config):
                           "isn't critical for 2.1, but the package_metadata.json file with the"
                           "noarch stuff is.  That's covered sufficiently in the test above.")
 def test_noarch_python_2(test_config):
-    recipe = os.path.join(metadata_dir, "_noarch_python")
-    fn = api.get_output_file_path(recipe, config=test_config)
-    api.build(recipe, config=test_config)
-    assert package_has_file(fn, 'info/files') is not ''
-    extra = json.loads(package_has_file(fn, 'info/package_metadata.json').decode())
+    outputs = api.build(os.path.join(metadata_dir, "_noarch_python"), config=test_config)
+    assert package_has_file(outputs[0], 'info/files') is not ''
+    extra = json.loads(package_has_file(outputs[0], 'info/package_metadata.json').decode())
     assert 'noarch' in extra
     assert 'entry_points' in extra['noarch']
     assert 'type' in extra['noarch']
@@ -676,8 +666,7 @@ def test_noarch_python_2(test_config):
 
 
 def test_skip_compile_pyc(test_config):
-    recipe = os.path.join(metadata_dir, "skip_compile_pyc")
-    outputs = api.build(recipe, config=test_config)
+    outputs = api.build(os.path.join(metadata_dir, "skip_compile_pyc"), config=test_config)
     tf = tarfile.open(outputs[0])
     pyc_count = 0
     for f in tf.getmembers():
@@ -692,10 +681,9 @@ def test_skip_compile_pyc(test_config):
     assert pyc_count == 2, "there should be 2 .pyc files, instead there were {}".format(pyc_count)
 
 
-#@pytest.mark.skipif(on_win, reason="binary prefixes not supported on Windows")
 def test_detect_binary_files_with_prefix(test_config):
-    recipe = os.path.join(metadata_dir, "_detect_binary_files_with_prefix")
-    outputs = api.build(recipe, config=test_config)
+    outputs = api.build(os.path.join(metadata_dir, "_detect_binary_files_with_prefix"),
+                        config=test_config)
     matches = []
     with tarfile.open(outputs[0]) as tf:
         has_prefix = tf.extractfile('info/has_prefix')
@@ -736,8 +724,7 @@ def test_fix_permissions(test_config):
 
 @pytest.mark.skipif(not on_win, reason="windows-only functionality")
 def test_script_win_creates_exe(test_config):
-    recipe = os.path.join(metadata_dir, "_script_win_creates_exe")
-    outputs = api.build(recipe, config=test_config)
+    outputs = api.build(os.path.join(metadata_dir, "_script_win_creates_exe"), config=test_config)
     assert package_has_file(outputs[0], 'Scripts/test-script.exe')
     assert package_has_file(outputs[0], 'Scripts/test-script-script.py')
 
@@ -749,11 +736,9 @@ def test_output_folder_moves_file(test_metadata, testing_workdir):
 
 
 def test_info_files_json(test_config):
-    recipe = os.path.join(metadata_dir, "ignore_some_prefix_files")
-    fn = api.get_output_file_path(recipe, config=test_config)
-    api.build(recipe, config=test_config)
-    assert package_has_file(fn, "info/paths.json")
-    with tarfile.open(fn) as tf:
+    outputs = api.build(os.path.join(metadata_dir, "ignore_some_prefix_files"), config=test_config)
+    assert package_has_file(outputs[0], "info/paths.json")
+    with tarfile.open(outputs[0]) as tf:
         data = json.loads(tf.extractfile('info/paths.json').read().decode('utf-8'))
     fields = ["_path", "sha256", "size_in_bytes", "path_type", "file_mode", "no_link",
               "prefix_placeholder", "inode_paths"]

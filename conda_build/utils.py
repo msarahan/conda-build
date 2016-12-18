@@ -4,6 +4,7 @@ from collections import defaultdict
 import contextlib
 import fnmatch
 from glob import glob
+import json
 from locale import getpreferredencoding
 import logging
 import operator
@@ -674,3 +675,16 @@ def find_recipe(path):
     elif not results:
         raise IOError("No meta.yaml or conda.yaml files found in %s" % path)
     return results[0]
+
+
+def get_installed_packages(path):
+    '''
+    Scan all json files in 'path' and return a dictionary with their contents.
+    Files are assumed to be in 'index.json' format.
+    '''
+    installed = dict()
+    for filename in glob(os.path.join(path, 'conda-meta', '*.json')):
+        with open(filename) as file:
+            data = json.load(file)
+            installed[data['name']] = data
+    return installed
