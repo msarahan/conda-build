@@ -4,10 +4,10 @@ package:
 
 requirements:
   build:
-    - python {{ python_pin }}
+    - python {{ python }}
     - numpy
   run:
-    - python {{ python_pin }}
+    - python {{ python }}
     - numpy
 
 about:

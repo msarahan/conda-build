@@ -112,6 +112,15 @@ class Config(object):
                   Setting('prefix_length_fallback', True),
                   Setting('_prefix_length', DEFAULT_PREFIX_LENGTH),
 
+                  # variants
+                  Setting('variant_config_files', []),
+                  Setting('ignore_system_variants', False),
+
+                  # append/clobber metadata section data (for global usage.  Can also add files to
+                  #    recipe.)
+                  Setting('append_sections_file', None),
+                  Setting('clobber_sections_file', None),
+
                   # pypi upload settings (twine)
                   Setting('password', None),
                   Setting('sign', False),

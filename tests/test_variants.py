@@ -4,16 +4,17 @@ import tempfile
 
 from conda_build import variants
 from conda_build import render
+from .utils import testing_workdir, test_config
 
 import yaml
 
-global_specs = {"python_pin": ["2.7", "3.5"],
-                "numpy_pin": ["1.10", "1.11"]}
+global_specs = {"python": ["2.7", "3.5"],
+                "numpy": ["1.10", "1.11"]}
 
-single_version = {"python_pin": "2.7",
-                  "numpy_pin": "1.10"}
+single_version = {"python": "2.7",
+                  "numpy": "1.10"}
 
-no_numpy_version = {"python_pin": ["2.7", "3.5"]}
+no_numpy_version = {"python": ["2.7", "3.5"]}
 
 thisdir = os.path.dirname(__file__)
 
@@ -22,38 +23,38 @@ def test_later_spec_priority():
     # override a single key
     combined_spec = variants.combine_specs([global_specs, single_version])
     assert len(combined_spec) == 2
-    assert combined_spec["python_pin"] == "2.7"
+    assert combined_spec["python"] == "2.7"
 
     # keep keys that are not overwritten
     combined_spec = variants.combine_specs([single_version, no_numpy_version])
     assert len(combined_spec) == 2
-    assert len(combined_spec["python_pin"]) == 2
+    assert len(combined_spec["python"]) == 2
 
 
-def test_get_package_variants():
+def test_get_package_variants(test_config):
     with tempfile.NamedTemporaryFile() as f:
+        test_config.variant_config_files = [f.name]
+        test_config.ignore_system_config = True
         yaml.dump(global_specs, f)
-        metadata, _ = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
-                                        no_download_source=False, verbose=False,
-                                        permit_undefined_jinja=True)
-        vars = variants.get_package_variants(metadata, config_file=f.name,
-                                             ignore_system_config=True)
-    assert "python_pin" in vars
+        metadata = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
+                                        no_download_source=False, config=test_config)
+    # one for each Python version
+    assert len(metadata) == 2
+    assert 'python 2.7' in metadata[0][0].meta['requirements']['run'][0]
+    assert 'python 3.5' in metadata[1][0].meta['requirements']['run'][0]
 
 
-def test_build_config_file():
-    metadata, _ = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
-                                    no_download_source=False, verbose=False,
-                                    permit_undefined_jinja=True)
+def test_build_config_file(test_config):
+    metadata = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
+                                    no_download_source=False, config=test_config)
     assert not any("git" in pkg for pkg in metadata.meta["requirements"]["build"]), metadata.meta["requirements"]["build"]
     metadata = render.add_build_config(metadata, os.path.join(thisdir, "variant_recipe", "build_config.yaml"))
     assert any("git" in pkg for pkg in metadata.meta["requirements"]["build"]), metadata.meta["requirements"]["build"]
 
 
-def test_build_bootstrap_env_by_name():
-    metadata, _ = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
-                                       no_download_source=False, verbose=False,
-                                       permit_undefined_jinja=True)
+def test_build_bootstrap_env_by_name(test_config):
+    metadata = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
+                                    no_download_source=False, config=test_config)
     assert not any("git" in pkg for pkg in metadata.meta["requirements"]["build"]), metadata.meta["requirements"]["build"]
     try:
         cmd = "conda create -y -n conda_build_bootstrap_test git"
@@ -65,10 +66,8 @@ def test_build_bootstrap_env_by_name():
         subprocess.check_call(cmd.split())
 
 
-def test_build_bootstrap_env_by_path():
-    metadata, _ = render.render_recipe(os.path.join(thisdir, "variant_recipe"),
-                                       no_download_source=False, verbose=False,
-                                       permit_undefined_jinja=True)
+def test_build_bootstrap_env_by_path(test_config):
+    metadata = render.render_recipe(os.path.join(thisdir, "variant_recipe"), no_download_source=False, config=test_config)
     assert not any("git" in pkg for pkg in metadata.meta["requirements"]["build"]), metadata.meta["requirements"]["build"]
     path = os.path.join(thisdir, "conda_build_bootstrap_test")
     try:

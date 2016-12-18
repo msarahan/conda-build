@@ -25,8 +25,10 @@ from .conda_interface import PY3, envs_dirs
 from conda_build import exceptions, utils
 from conda_build.metadata import MetaData, parse
 import conda_build.source as source
+from conda_build.config import get_or_merge_config
 from conda_build.completers import all_versions, conda_version
 from conda_build.utils import rm_rf
+from conda_build.variants import get_package_variants
 
 
 def set_language_env_vars(args, parser, config, execute=None):
@@ -92,46 +94,29 @@ def _scan_metadata(path):
 
 # This really belongs in conda, and it is int conda.cli.common,
 #   but we don't presently have an API there.
-def _get_env_path(env_name):
-    if os.path.isdir(env_name):
-        return env_name
-    for envs_dir in envs_dirs + [os.getcwd()]:
-        path = os.path.join(envs_dir, env_name)
-        if os.path.isdir(path):
-            return path
-    return None
+def _get_env_path(env_name_or_path):
+    if not os.path.isdir(env_name_or_path):
+        for envs_dir in envs_dirs + [os.getcwd()]:
+            path = os.path.join(envs_dir, env_name_or_path)
+            if os.path.isdir(path):
+                env_name_or_path = path
+                break
+    bootstrap_metadir = os.path.join(env_name_or_path, 'conda-meta')
+    if not isdir(bootstrap_metadir):
+        print("Bootstrap environment '%s' not found" % env_name_or_path)
+        sys.exit(1)
+    return env_name_or_path
 
 
-def add_build_config(metadata, build_config_or_bootstrap):
-    if not build_config_or_bootstrap:
-        return metadata
-    # don't modify it in place.
-    metadata = copy.deepcopy(metadata)
-    path = _get_env_path(build_config_or_bootstrap)
-    # concatenate build requirements from the build config file to the build
-    # requirements from the recipe
-    if os.path.isfile(build_config_or_bootstrap):
-        try:
-            with open(build_config_or_bootstrap) as configfile:
-                build_config = parse(configfile.read())
-            metadata.meta['requirements']['build'] += build_config['requirements']['build']
-        except Exception as e:
-            print("Unable to read config file '%s':" % build_config_or_bootstrap)
-            print(e)
-            sys.exit(1)
-    elif path:
-        # construct build requirements that replicate the given bootstrap environment
-        # and concatenate them to the build requirements from the recipe
-        bootstrap_metadir = os.path.join(path, 'conda-meta')
-        if not isdir(bootstrap_metadir):
-            print("Bootstrap environment '%s' not found" % build_config_or_bootstrap)
-            sys.exit(1)
-        bootstrap_metadata = _scan_metadata(bootstrap_metadir)
-        bootstrap_requirements = []
-        for package, data in bootstrap_metadata.items():
-            bootstrap_requirements.append("%s %s %s" % (package, data['version'], data['build']))
-        metadata.meta['requirements']['build'] += bootstrap_requirements
-    return metadata
+def get_dependencies_from_environment(env_name_or_path):
+    path = _get_env_path(env_name_or_path)
+    # construct build requirements that replicate the given bootstrap environment
+    # and concatenate them to the build requirements from the recipe
+    bootstrap_metadata = _scan_metadata(path)
+    bootstrap_requirements = []
+    for package, data in bootstrap_metadata.items():
+        bootstrap_requirements.append("%s %s %s" % (package, data['version'], data['build']))
+    return {'requirements': {'build': bootstrap_requirements}}
 
 
 def _jinja_config(config, jinja_env):
@@ -170,14 +155,21 @@ def parse_or_try_download(metadata, no_download_source, config,
         # we have not downloaded source in the render phase.  Download it in
         #     the build phase
         need_source_download = not no_download_source
-    if not need_reparse_in_env:
-        try:
-            metadata.parse_until_resolved(config=config)
-        except exceptions.UnableToParseMissingSetuptoolsDependencies:
-            need_reparse_in_env = True
+
     if metadata.get_value('build/noarch'):
         config.noarch = True
-    return metadata, need_source_download, need_reparse_in_env
+
+    output = []
+    variants = get_package_variants(metadata, config.variant_config_files,
+                                    config.ignore_system_variants)
+    for variant in variants:
+        metadata = copy.deepcopy(metadata)
+        try:
+            metadata.parse_until_resolved(config=config, variant=variant)
+        except exceptions.UnableToParseMissingSetuptoolsDependencies:
+            need_reparse_in_env = True
+        output.append((metadata, need_source_download, need_reparse_in_env))
+    return output
 
 
 def reparse(metadata, config):
@@ -222,15 +214,17 @@ def render_recipe(recipe_path, config, no_download_source=False):
         sys.stderr.write(e.error_msg())
         sys.exit(1)
 
-    m, need_download, need_reparse_in_env = parse_or_try_download(m,
-                                                no_download_source=no_download_source,
-                                                config=config)
+    # each tuple item is a tuple of 3 items:
+    #    metadata, need_download, need_reparse_in_env
+    rendered_metadata = parse_or_try_download(m,
+                                              no_download_source=no_download_source,
+                                              config=config)
     config.noarch = bool(m.get_value('build/noarch'))
 
     if need_cleanup:
         rm_rf(recipe_dir)
 
-    return m, need_download, need_reparse_in_env
+    return rendered_metadata
 
 
 # Next bit of stuff is to support YAML output in the order we expect.

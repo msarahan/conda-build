@@ -2,9 +2,10 @@ from __future__ import absolute_import, division, print_function
 
 import logging
 import os
+from os.path import isfile, join
 import re
 import sys
-from os.path import isfile, join
+import tempfile
 
 from .conda_interface import iteritems, PY3, text_type
 from .conda_interface import memoized, md5_file
@@ -143,6 +144,18 @@ def ensure_valid_fields(meta):
         pin_depends = ''
     if pin_depends not in ('', 'record', 'strict'):
         raise RuntimeError("build/pin_depends cannot be '%s'" % pin_depends)
+
+
+def _merge_or_update_values(base, new, merge):
+    for key, value in new.items():
+        if hasattr(value, 'keys'):
+            return _merge_or_update_values(base[key], value, merge)
+        else:
+            if merge:
+                base[key] += value
+            else:
+                base[key] = value
+    return base
 
 
 def ensure_valid_noarch_value(meta):
@@ -429,7 +442,20 @@ class MetaData(object):
     def disable_pip(self):
         return 'build' in self.meta and 'disable_pip' in self.meta['build']
 
-    def parse_again(self, config=None, permit_undefined_jinja=False, jinja_config=lambda *x: None):
+    def _append_metadata_sections(self, sections_file, merge, config):
+        """Append to or replace subsections to meta.yaml
+
+        This is used to alter input recipes, so that a given requirement or
+        setting is applied without manually altering the input recipe. It is
+        intended for vendors who want to extend existing recipes without
+        necessarily removing information. pass merge=False to replace sections.
+        """
+        with open(sections_file) as configfile:
+            build_config = parse(configfile.read(), config=config)
+        _merge_or_update_values(self.meta, build_config, merge=merge)
+
+    def parse_again(self, config=None, permit_undefined_jinja=False, jinja_config=lambda *x: None,
+                    variant=None):
         """Redo parsing for key-value pairs that are not initialized in the
         first pass.
 
@@ -442,43 +468,61 @@ class MetaData(object):
         jinja_config: A function to customize jinja's global namespace. It is called as
                       `jinja_config(jinja_env)` just before parsing starts.
         """
-        if not self.meta_path:
-            return
 
         if not config:
             config = self.config
 
+        os.environ["CONDA_BUILD_STATE"] = "RENDER"
         try:
-            os.environ["CONDA_BUILD_STATE"] = "RENDER"
-            self.meta = parse(self._get_contents(permit_undefined_jinja, config=config,
-                                                 jinja_config=jinja_config),
-                              config=config, path=self.meta_path)
+            if self.meta_path:
+                self.meta = parse(self._get_contents(permit_undefined_jinja, config=config,
+                                                        jinja_config=jinja_config, variant=variant),
+                                    config=config, path=self.meta_path)
+
+            else:
+                if (isfile(self.requirements_path) and
+                        not self.meta['requirements']['run']):
+                    self.meta.setdefault('requirements', {})
+                    run_requirements = specs_from_url(self.requirements_path)
+                    self.meta['requirements']['run'] = run_requirements
+
+                append_sections_file = (self.config.append_sections_file or
+                                        os.path.join(self.path, 'recipe_append.yaml'))
+                if not os.path.isfile(append_sections_file):
+                    append_sections_file = None
+                clobber_sections_file = (self.config.clobber_sections_file or
+                                        os.path.join(self.path, 'recipe_clobber.yaml'))
+                if not os.path.isfile(clobber_sections_file):
+                    clobber_sections_file = None
+
+                if append_sections_file:
+                    self._append_metadata_sections(append_sections_file, merge=True,
+                                                   config=config)
+                if clobber_sections_file:
+                    self._append_metadata_sections(clobber_sections_file, merge=False,
+                                                   config=config)
         except:
             raise
         finally:
             del os.environ["CONDA_BUILD_STATE"]
 
-        if (isfile(self.requirements_path) and
-                   not self.meta['requirements']['run']):
-            self.meta.setdefault('requirements', {})
-            run_requirements = specs_from_url(self.requirements_path)
-            self.meta['requirements']['run'] = run_requirements
-
-    def parse_until_resolved(self, config):
+    def parse_until_resolved(self, config, variant=None):
+        """variant contains key-value mapping for additional functions and values
+        for jinja2 variables"""
         # undefined_jinja_vars is refreshed by self.parse again
         undefined_jinja_vars = ()
         # always parse again at least once.
-        self.parse_again(config, permit_undefined_jinja=True)
+        self.parse_again(config, permit_undefined_jinja=True, variant=variant)
 
         while set(undefined_jinja_vars) != set(self.undefined_jinja_vars):
             undefined_jinja_vars = self.undefined_jinja_vars
-            self.parse_again(config, permit_undefined_jinja=True)
+            self.parse_again(config, permit_undefined_jinja=True, variant=variant)
         if undefined_jinja_vars:
             sys.exit("Undefined Jinja2 variables remain ({}).  Please enable "
                      "source downloading and try again.".format(self.undefined_jinja_vars))
 
         # always parse again at the end, too.
-        self.parse_again(config, permit_undefined_jinja=True)
+        self.parse_again(config, permit_undefined_jinja=True, variant=variant)
 
     @classmethod
     def fromstring(cls, metadata, config=None):
@@ -498,6 +542,7 @@ class MetaData(object):
         m = super(MetaData, cls).__new__(cls)
         m.path = ''
         m.meta_path = ''
+        m.requirements_path = ''
         m.meta = sanitize(metadata)
 
         if not config:
@@ -741,7 +786,7 @@ class MetaData(object):
     def skip(self):
         return self.get_value('build/skip', False)
 
-    def _get_contents(self, permit_undefined_jinja, config, jinja_config):
+    def _get_contents(self, permit_undefined_jinja, config, jinja_config, variant=None):
         '''
         Get the contents of our [meta.yaml|conda.yaml] file.
         If jinja is installed, then the template.render function is called
@@ -786,10 +831,20 @@ class MetaData(object):
         env = jinja2.Environment(loader=loader, undefined=undefined_type)
 
         env.globals.update(ns_cfg(config))
+        if variant:
+            env.globals.update(variant)
         env.globals.update(context_processor(self, path, config=config,
                                              permit_undefined_jinja=permit_undefined_jinja))
         jinja_config(env)
         self.jinja_config_callback(env)
+
+        # we write a temporary file, so that we can dynamically replace sections in the meta.yaml
+        #     file on disk.  These replaced sections also need to have jinja2 filling in templates.
+        # The really hard part here is that we need to operate on plain text, because we need to
+        #     keep selectors and all that.
+
+        # Leaving that for a future goal.  Not supporting jinja2 on replaced sections right now.
+        # append any extra metadata present in the recipe folder
 
         try:
             template = env.get_or_select_template(filename)
@@ -799,13 +854,13 @@ class MetaData(object):
                 self.undefined_jinja_vars = UndefinedNeverFail.all_undefined_names
             else:
                 self.undefined_jinja_vars = []
-            return rendered
 
         except jinja2.TemplateError as ex:
             if "'None' has not attribute" in str(ex):
                 ex = "Failed to run jinja context function"
             sys.exit("Error: Failed to render jinja template in {}:\n{}"
                      .format(self.meta_path, str(ex)))
+        return rendered
 
     def __unicode__(self):
         '''

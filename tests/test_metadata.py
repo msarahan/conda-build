@@ -4,7 +4,7 @@ import unittest
 from conda_build.conda_interface import MatchSpec
 
 from conda_build.metadata import select_lines, handle_config_version, expand_globs
-from .utils import testing_workdir, test_config, test_metadata
+from .utils import testing_workdir, test_config, test_metadata, thisdir
 
 
 def test_uses_vcs_in_metadata(testing_workdir, test_metadata):
@@ -108,3 +108,18 @@ class HandleConfigVersionTests(unittest.TestCase):
                           handle_config_version,
                           MatchSpec('numpy x.x'), None)
 
+
+def test_append_section_data(test_metadata):
+    test_metadata.config.append_sections_file = os.path.join(thisdir, 'test-append.yaml')
+    test_metadata.parse_again()
+    assert len(test_metadata.meta['requirements']['build']) == 2
+    assert 'frank' in test_metadata.meta['requirements']['build']
+
+
+def test_clobber_section_data(test_metadata):
+    test_metadata.config.clobber_sections_file = os.path.join(thisdir, 'test-clobber.yaml')
+    test_metadata.parse_again()
+    # a field that should be clobbered
+    test_metadata.meta['about']['summary'] = 'yep'
+    # a field that should stay the same
+    test_metadata.meta['about']['home'] = 'sweet home'
