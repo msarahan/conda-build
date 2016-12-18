@@ -25,38 +25,55 @@ from conda_build.utils import expand_globs as _expand_globs
 
 
 def render(recipe_path, config=None, **kwargs):
+    """Given path to a recipe, return the MetaData object representing that recipe, with jinja2
+       templates evaluated"""
     from conda_build.render import render_recipe
     config = get_or_merge_config(config, **kwargs)
     return render_recipe(recipe_path, no_download_source=config.no_download_source, config=config)
 
 
 def output_yaml(metadata, file_path=None):
+    """Save a rendered recipe in its final form to the path given by file_path"""
     from conda_build.render import output_yaml
     return output_yaml(metadata, file_path)
 
 
 def get_output_file_path(recipe_path_or_metadata, no_download_source=False, config=None, **kwargs):
+    """Get output file paths for any packages that would be created by a recipe
+
+    Both split packages (recipes with more than one ouptut) and build matrices,
+    created with variants, contribute to the list of file paths here.
+    """
     from conda_build.render import render_recipe, bldpkg_path
     config = get_or_merge_config(config, **kwargs)
     if hasattr(recipe_path_or_metadata, 'config'):
         metadata = recipe_path_or_metadata
     else:
-        metadata, _, _ = render_recipe(recipe_path_or_metadata,
-                                    no_download_source=no_download_source,
-                                    config=config)
-    return bldpkg_path(metadata)
+        metadata = render_recipe(recipe_path_or_metadata,
+                                 no_download_source=no_download_source,
+                                 config=config)
+    return [bldpkg_path(m[0]) for m in metadata]
 
 
 def check(recipe_path, no_download_source=False, config=None, **kwargs):
+    """Check validity of input recipe path
+
+    Verifies that recipe can be completely rendered, and that fields of the rendered recipe are
+    valid fields, with some value checking.
+    """
     from conda_build.render import render_recipe
     config = get_or_merge_config(config, **kwargs)
-    metadata, _, _ = render_recipe(recipe_path, no_download_source=no_download_source,
-                                   config=config)
-    return metadata.check_fields()
+    metadata = render_recipe(recipe_path, no_download_source=no_download_source,
+                             config=config)
+    return all(m[0].check_fields() for m in metadata)
 
 
 def build(recipe_paths_or_metadata, post=None, need_source_download=True,
           build_only=False, notest=False, config=None, **kwargs):
+    """Run the build step.
+
+    If recipe paths are provided, renders recipe before building.
+    Tests built packages by default.  notest=True to skip test."""
     import os
     from conda_build.build import build_tree
     from conda_build.conda_interface import string_types
@@ -87,6 +104,10 @@ def build(recipe_paths_or_metadata, post=None, need_source_download=True,
 
 
 def test(recipedir_or_package_or_metadata, move_broken=True, config=None, **kwargs):
+    """Run tests on either a package or a recipe folder
+
+    For a recipe folder, it renders the recipe enough to know what package to download, and obtains
+    it from your currently configuured channels."""
     from conda_build.build import test
 
     if hasattr(recipedir_or_package_or_metadata, 'config'):
@@ -126,6 +147,7 @@ def import_sign_key(private_key_path, new_name=None):
 
 
 def sign(file_path, key_name_or_path=None):
+    """Create a signature file for accompanying a package"""
     from .sign import sign_and_write
     return sign_and_write(file_path, key_name_or_path)
 
