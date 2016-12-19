@@ -13,7 +13,7 @@ import pytest
 from conda_build import build, api
 from conda_build.metadata import MetaData
 from conda_build.utils import rm_rf, on_win
-from conda_build.conda_interface import LinkError, PaddingError
+from conda_build.conda_interface import LinkError, PaddingError, url_path
 
 from .utils import (testing_workdir, test_config, test_metadata, metadata_dir,
                     get_noarch_python_meta, put_bad_conda_on_path)
@@ -65,16 +65,14 @@ def test_env_creation_with_short_prefix_does_not_deadlock(caplog):
     config = api.Config(croot=test_base, anaconda_upload=False, verbose=True)
     recipe_path = os.path.join(metadata_dir, "has_prefix_files")
     metadata = api.render(recipe_path, config=config)[0][0]
-    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix_deadlock'
-    fn = api.get_output_file_path(metadata)[0]
-    if os.path.isfile(fn):
-        os.remove(fn)
+    pkg_name = 'test_env_creation_with_short_prefix_deadlock'
+    metadata.meta['package']['name'] = pkg_name
     metadata.config.prefix_length = 80
     try:
-        api.build(metadata)
-        pkg_name = os.path.basename(fn).replace("-1.0-0.tar.bz2", "")
-        assert not api.inspect_prefix_length(fn, 255)
+        output = api.build(metadata)[0]
+        assert not api.inspect_prefix_length(output, 255)
         metadata.config.prefix_length = 255
+        metadata.config.channel_urls = [url_path(os.path.dirname(output))]
         build.create_env(config.build_prefix, specs=["python", pkg_name], config=metadata.config)
     except:
         raise
@@ -91,17 +89,15 @@ def test_env_creation_with_prefix_fallback_disabled():
                         prefix_length_fallback=False)
     recipe_path = os.path.join(metadata_dir, "has_prefix_files")
     metadata = api.render(recipe_path, config=config)[0][0]
-    metadata.meta['package']['name'] = 'test_env_creation_with_short_prefix_fallback'
-    fn = api.get_output_file_path(metadata)[0]
-    if os.path.isfile(fn):
-        os.remove(fn)
+    pkg_name = 'test_env_creation_with_short_prefix_fallback'
+    metadata.meta['package']['name'] = pkg_name
     metadata.config.prefix_length = 80
 
     with pytest.raises((SystemExit, PaddingError, LinkError)):
-        api.build(metadata)
-        pkg_name = os.path.basename(fn).replace("-1.0-0.tar.bz2", "")
-        assert not api.inspect_prefix_length(fn, 255)
+        output = api.build(metadata)[0]
+        assert not api.inspect_prefix_length(output, 255)
         config.prefix_length = 255
+        config.channel_urls = [url_path(os.path.dirname(output))]
         build.create_env(config.build_prefix, specs=["python", pkg_name], config=config)
 
 

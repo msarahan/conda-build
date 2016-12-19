@@ -783,7 +783,7 @@ def bundle_conda(output, metadata, config, env, **kw):
     tmp_metadata.meta['requirements'] = {'run': output.get('requirements', [])}
 
     output_filename = ('-'.join([output['name'], metadata.version(),
-                                 build_string_from_metadata(tmp_metadata)]) + '.tar.bz2')
+                                 tmp_metadata.build_id()]) + '.tar.bz2')
     files = list(set(expand_globs(files, config.build_prefix)))
     info_files = create_info_files(tmp_metadata, files, config=config, prefix=config.build_prefix)
     for f in info_files:

@@ -35,6 +35,8 @@ except ImportError:
 on_win = (sys.platform == 'win32')
 log = logging.getLogger(__file__)
 
+HASH_LENGTH = 4
+
 
 def ns_cfg(config):
     # Remember to update the docs of any of this changes
@@ -701,25 +703,30 @@ class MetaData(object):
         # create a frozen dictionary of the requirements section
         # sort it
         # hash the sorted dictionary
-        # save only the first 4 characters - should be more than enough, since these only need to
+        # save only the first HASH_LENGTH characters - should be more than enough, since these only need to
         #    be unique within one version
         sections = ['source', 'requirements', 'build']
         composite = HashableDict({section: self.get_section(section) for section in sections})
         # remove the build number from the hash, so that we can bump it without changing the hash
         if 'number' in composite['build']:
             del composite['build']['number']
-        return 'h' + str(abs(hash(composite)))[:4]
+        return 'h' + str(abs(hash(composite)))[:HASH_LENGTH]
 
     def build_id(self):
-        ret = self.get_value('build/string')
-        if ret:
-            check_bad_chrs(ret, 'build/string')
+        out = self.get_value('build/string')
+        if out:
+            check_bad_chrs(out, 'build/string')
         else:
-            ret = build_string_from_metadata(self)
-        ret = ret.rsplit('_', 1)
-        out = ret[0] + self._hash_dependencies()
-        if len(ret) > 1:
-            out = '_'.join([out] + ret[1:])
+            out = build_string_from_metadata(self)
+        if not re.findall('h[0-9]{%s}' % HASH_LENGTH, out):
+            ret = out.rsplit('_', 1)
+            try:
+                int(ret[0])
+                out = self._hash_dependencies() + '_' + str(ret[0])
+            except ValueError:
+                out = ret[0] + self._hash_dependencies()
+            if len(ret) > 1:
+                out = '_'.join([out] + ret[1:])
         return out
 
     def dist(self):

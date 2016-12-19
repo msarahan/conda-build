@@ -44,5 +44,5 @@ def test_get_package_variants(test_config):
                                         no_download_source=False, config=test_config)
     # one for each Python version
     assert len(metadata) == 2
-    assert 'python 2.7' in metadata[0][0].meta['requirements']['run'][0]
-    assert 'python 3.5' in metadata[1][0].meta['requirements']['run'][0]
+    assert any('python 2.7' in req for req in metadata[0][0].meta['requirements']['run'])
+    assert any('python 3.5' in req for req in metadata[1][0].meta['requirements']['run'])

@@ -56,7 +56,7 @@ class TarCheck(object):
 
     def index_json(self):
         info = json.loads(self.t.extractfile('info/index.json').read().decode('utf-8'))
-        for varname in 'name', 'version', 'build':
+        for varname in 'name', 'version':
             if info[varname] != getattr(self, varname):
                 raise Exception('%s: %r != %r' % (varname, info[varname],
                                                   getattr(self, varname)))
