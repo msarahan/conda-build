@@ -190,3 +190,32 @@ def test_compiler_metadata_cross_compiler():
     assert 'c-compiler-linux-macos' in metadata.meta['requirements']['build']
     assert 'cxx-compiler-linux-macos' in metadata.meta['requirements']['build']
     assert 'fortran-compiler-linux-macos' in metadata.meta['requirements']['build']
+
+
+def test_hash_build_id(test_metadata):
+    assert test_metadata._hash_dependencies() == 'h3291'
+    assert test_metadata.build_id() == 'py27h3291_1'
+
+
+def test_hash_build_id_key_order(test_metadata):
+    deps = test_metadata.meta['requirements']['build'][:]
+
+    # first, prepend
+    newdeps = deps[:]
+    newdeps.insert(0, 'steve')
+    test_metadata.meta['requirements']['build'] = newdeps
+    hash_pre = test_metadata._hash_dependencies()
+
+    # next, append
+    newdeps = deps[:]
+    newdeps.append('steve')
+    test_metadata.meta['requirements']['build'] = newdeps
+    hash_post = test_metadata._hash_dependencies()
+
+    # make sure they match
+    assert hash_pre == hash_post
+
+
+def test_hash_applies_to_custom_build_string(test_metadata):
+    test_metadata.meta['build']['string'] = 'steve'
+    assert test_metadata.build_id() == 'steveh6666'

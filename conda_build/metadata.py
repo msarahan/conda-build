@@ -16,7 +16,8 @@ from .conda_interface import envs_dirs
 from conda_build import exceptions
 from conda_build.features import feature_list
 from conda_build.config import Config
-from conda_build.utils import ensure_list, find_recipe, expand_globs, get_installed_packages
+from conda_build.utils import (ensure_list, find_recipe, expand_globs, get_installed_packages,
+                               HashableDict)
 from conda_build.license_family import ensure_valid_license_family
 
 try:
@@ -692,13 +693,34 @@ class MetaData(object):
             res.append(ms)
         return res
 
+    def _hash_dependencies(self):
+        """With arbitrary pinning, we can't depend on the build string as done in
+        build_string_from_metadata - there's just too much info.  Instead, we keep that as-is, to
+        not be disruptive, but we add this extra hash, which is just a way of distinguishing files
+        on disk.  The actual determination of dependencies is done in the repository metadata."""
+        # create a frozen dictionary of the requirements section
+        # sort it
+        # hash the sorted dictionary
+        # save only the first 4 characters - should be more than enough, since these only need to
+        #    be unique within one version
+        sections = ['source', 'requirements', 'build']
+        composite = HashableDict({section: self.get_section(section) for section in sections})
+        # remove the build number from the hash, so that we can bump it without changing the hash
+        if 'number' in composite['build']:
+            del composite['build']['number']
+        return 'h' + str(abs(hash(composite)))[:4]
+
     def build_id(self):
         ret = self.get_value('build/string')
         if ret:
             check_bad_chrs(ret, 'build/string')
         else:
             ret = build_string_from_metadata(self)
-        return ret
+        ret = ret.rsplit('_', 1)
+        out = ret[0] + self._hash_dependencies()
+        if len(ret) > 1:
+            out = '_'.join([out] + ret[1:])
+        return out
 
     def dist(self):
         return '%s-%s-%s' % (self.name(), self.version(), self.build_id())
@@ -865,13 +887,12 @@ class MetaData(object):
                                              permit_undefined_jinja=permit_undefined_jinja,
                                              variant=variant))
 
+        # Future goal here.  Not supporting jinja2 on replaced sections right now.
+
         # we write a temporary file, so that we can dynamically replace sections in the meta.yaml
         #     file on disk.  These replaced sections also need to have jinja2 filling in templates.
         # The really hard part here is that we need to operate on plain text, because we need to
         #     keep selectors and all that.
-
-        # Leaving that for a future goal.  Not supporting jinja2 on replaced sections right now.
-        # append any extra metadata present in the recipe folder
 
         try:
             template = env.get_or_select_template(filename)

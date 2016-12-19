@@ -688,3 +688,23 @@ def get_installed_packages(path):
             data = json.load(file)
             installed[data['name']] = data
     return installed
+
+
+def _convert_lists_to_sets(_dict):
+    for k, v in _dict.items():
+        if hasattr(v, 'keys'):
+            _dict[k] = HashableDict(_convert_lists_to_sets(v))
+        elif hasattr(v, '__iter__'):
+            _dict[k] = sorted(list(set(v)))
+    return _dict
+
+
+class HashableDict(dict):
+    """use hashable frozen dictionaries for resources and resource types so that they can be in sets
+    """
+    def __init__(self, *args, **kwargs):
+        super(HashableDict, self).__init__(*args, **kwargs)
+        _convert_lists_to_sets(self)
+
+    def __hash__(self):
+        return hash(json.dumps(self, sort_keys=True))
