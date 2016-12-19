@@ -2,10 +2,12 @@ import os
 import subprocess
 import unittest
 
+import pytest
+
 from conda_build.conda_interface import MatchSpec
 
-from conda_build.metadata import select_lines, handle_config_version, expand_globs
-from .utils import testing_workdir, test_config, test_metadata, thisdir
+from conda_build.metadata import select_lines, handle_config_version, expand_globs, MetaData
+from .utils import testing_workdir, test_config, test_metadata, thisdir, metadata_dir
 
 
 def test_uses_vcs_in_metadata(testing_workdir, test_metadata):
@@ -151,3 +153,40 @@ def test_build_bootstrap_env_by_path(test_metadata):
     finally:
         cmd = "conda remove -y -p {} --all".format(path)
         subprocess.check_call(cmd.split())
+
+
+@pytest.mark.parametrize('py_ver', [('2.7', 'vs2008'),
+                                    ('3.4', 'vs2010'),
+                                    ('3.5', 'vs2015'), ])
+def test_native_compiler_metadata_win(test_config, py_ver):
+    test_config.platform = 'win'
+    variant = {'python': py_ver[0]}
+    metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), config=test_config, variant=variant)
+    assert py_ver[1] in metadata.meta['requirements']['build']
+
+
+def test_native_compiler_metadata_linux(test_config):
+    test_config.platform = 'linux'
+    metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), config=test_config)
+    assert 'gcc' in metadata.meta['requirements']['build']
+    assert 'g++' in metadata.meta['requirements']['build']
+    assert 'gfortran' in metadata.meta['requirements']['build']
+
+
+def test_native_compiler_metadata_osx(test_config):
+    test_config.platform = 'osx'
+    metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), config=test_config)
+    assert 'gcc' in metadata.meta['requirements']['build']
+    assert 'g++' in metadata.meta['requirements']['build']
+    assert 'gfortran' in metadata.meta['requirements']['build']
+
+
+def test_compiler_metadata_cross_compiler():
+    variant = {'c-compiler': 'c-compiler-linux',
+               'cxx-compiler': 'cxx-compiler-linux',
+               'fortran-compiler': 'fortran-compiler-linux',
+               'target_platform': 'macos'}
+    metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), variant=variant)
+    assert 'c-compiler-linux-macos' in metadata.meta['requirements']['build']
+    assert 'cxx-compiler-linux-macos' in metadata.meta['requirements']['build']
+    assert 'fortran-compiler-linux-macos' in metadata.meta['requirements']['build']

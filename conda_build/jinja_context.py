@@ -203,13 +203,108 @@ def load_file_regex(config, load_file, regex_pattern, from_recipe_dir=False,
     return match if match else None
 
 
-def pin_compatible():
+def pin_compatible(config, package_name, version, package_table=None):
     """Query a compatibility database, or just guess about compatibility based on semantic
     versioning.  Returns string with guess about compatible pinning."""
-    pass
+    packages = get_installed_packages(config.build_prefix)
+    for package in packages:
+        name, version, buildnum = package.split()
+        if name == package_name:
+            versions = version.split('.')
+            if name in package_table:
+                # Look up compatibilty in table
+                compatibility = package_table[name]
+            else:
+                try:
+                    log.info('Package %s does not have compatibilty entry.  Assuming semantic '
+                             'versioning style, and allowing bug-fix revisions.  '
+                             'Please add package to lookup table if necessary.', name)
+                    compatibility = ".".join(versions[0], versions[1], '*')
+                except IndexError:
+                    log.warn('Package %s does not follow semantic versioning style.  '
+                             'Please add package to lookup table for compatible pinning.', name)
+    return compatibility
 
 
-def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jinja):
+# map python version to default compiler on windows, to match upstream python
+#    This mapping only sets the "native" compiler, and can be overridden by specifying a compiler
+#    in the conda-build variant configuration
+compilers = {
+    'win': {
+        'c': {
+            '2.7': 'vs2008',
+            '3.3': 'vs2010',
+            '3.4': 'vs2010',
+            '3.5': 'vs2015',
+        },
+        'cxx': {
+            '2.7': 'vs2008',
+            '3.3': 'vs2010',
+            '3.4': 'vs2010',
+            '3.5': 'vs2015',
+        },
+        'fortran': 'gfortran',
+    },
+    'linux': {
+        'c': 'gcc',
+        'cxx': 'g++',
+        'fortran': 'gfortran',
+    },
+    # TODO: Clang?  System clang, or compiled package?  Can handle either as package.
+    'osx': {
+        'c': 'gcc',
+        'cxx': 'g++',
+        'fortran': 'gfortran',
+    },
+}
+
+runtimes = {
+    'vs2008': 'vs2008_runtime',
+    'vs2010': 'vs2010_runtime',
+    'vs2015': 'vs2015_runtime',
+    'gfortran': 'libgfortran',
+    'g++': 'libstdc++',
+    'gcc': 'libgcc',
+}
+
+
+def _native_compiler(language, config, variant):
+    compiler = compilers[config.platform][language]
+    if hasattr(compiler, 'keys'):
+        compiler = compiler.get(variant.get('python', 'nope'), 'vs2015')
+    return compiler
+
+
+def compiler(language, config, variant):
+    """Support configuration of compilers.  This is somewhat platform specific.
+
+    Native compilers never list their host - it is always implied.  Generally, they are
+    metapackages, pointing at a package that does specify the host.  These in turn may be
+    metapackages, pointing at a package where the host is the same as the target (both being the
+    native architecture).
+    """
+    native_compiler = _native_compiler(language, config, variant)
+    language_compiler_key = '{}-compiler'.format(language)
+    # fall back to native if language-compiler is not explicitly set in variant
+    compiler = variant.get(language_compiler_key, native_compiler)
+
+    # support cross compilers.  A cross-compiler package will have a name such as
+    #    gcc-host-target
+    #    gcc-centos5-centos5
+    #    gcc-centos7-centos5
+    #
+    # Note that the host needs to be part of the compiler.  Right now, that means that the compiler
+    #    needs to be defined in the variant - not just the native default
+    if 'target_platform' in variant:
+        if language_compiler_key not in variant:
+            raise ValueError("{0} must be set in variant config in order to use target_platform."
+                             "Please set it to the name of the package, including the host "
+                             "(e.g. gcc-centos5)".format(language_compiler_key))
+        compiler = '-'.join([variant[language_compiler_key], variant['target_platform']])
+    return compiler
+
+
+def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jinja, variant):
     """
     Return a dictionary to use as context for jinja templates.
 
@@ -230,5 +325,8 @@ def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jin
         load_file_regex=partial(load_file_regex, config=config, recipe_dir=recipe_dir,
                                 permit_undefined_jinja=permit_undefined_jinja),
         installed=get_installed_packages(os.path.join(config.build_prefix, 'conda-meta')),
+        pin_compatible=partial(pin_compatible, config),
+        compiler=partial(compiler, variant=variant, config=config),
+        variant=variant,
         environ=environ)
     return ctx

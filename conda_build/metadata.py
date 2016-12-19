@@ -862,7 +862,8 @@ class MetaData(object):
         if variant:
             env.globals.update(variant)
         env.globals.update(context_processor(self, path, config=config,
-                                             permit_undefined_jinja=permit_undefined_jinja))
+                                             permit_undefined_jinja=permit_undefined_jinja,
+                                             variant=variant))
 
         # we write a temporary file, so that we can dynamically replace sections in the meta.yaml
         #     file on disk.  These replaced sections also need to have jinja2 filling in templates.
