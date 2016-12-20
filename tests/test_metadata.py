@@ -193,8 +193,8 @@ def test_compiler_metadata_cross_compiler():
 
 
 def test_hash_build_id(test_metadata):
-    assert test_metadata._hash_dependencies() == 'h3291'
-    assert test_metadata.build_id() == 'py27h3291_1'
+    assert test_metadata._hash_dependencies() == 'h8302'
+    assert test_metadata.build_id() == 'py27h8302_1'
 
 
 def test_hash_build_id_key_order(test_metadata):

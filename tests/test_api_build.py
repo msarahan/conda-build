@@ -137,7 +137,7 @@ def test_no_include_recipe_config_arg(test_metadata):
 
     # make sure that it is not there when the command line flag is passed
     test_metadata.config.include_recipe = False
-    test_metadata.meta['build_number'] = 2
+    test_metadata.meta['build']['number'] = 2
     output_file = api.build(test_metadata)[0]
     assert not package_has_file(output_file, "info/recipe/meta.yaml")
 
@@ -378,18 +378,15 @@ def test_requirements_txt_for_run_reqs(testing_workdir, test_config):
 
 
 def test_compileall_compiles_all_good_files(testing_workdir, test_config):
-    output_file = os.path.join(test_config.croot, test_config.subdir,
-                               'test_compileall-1.0-py{0}{1}_0.tar.bz2'.format(
-                                   sys.version_info.major, sys.version_info.minor))
-    api.build(os.path.join(metadata_dir, "_compile-test"), config=test_config)
+    output = api.build(os.path.join(metadata_dir, "_compile-test"), config=test_config)[0]
     good_files = ['f1.py', 'f3.py']
     bad_file = 'f2_bad.py'
     for f in good_files:
-        assert package_has_file(output_file, f)
+        assert package_has_file(output, f)
         # look for the compiled file also
-        assert package_has_file(output_file, add_mangling(f))
-    assert package_has_file(output_file, bad_file)
-    assert not package_has_file(output_file, add_mangling(bad_file))
+        assert package_has_file(output, add_mangling(f))
+    assert package_has_file(output, bad_file)
+    assert not package_has_file(output, add_mangling(bad_file))
 
 
 def test_render_setup_py_old_funcname(testing_workdir, test_config, caplog):
@@ -430,10 +427,11 @@ def test_build_metadata_object(test_metadata):
 @pytest.mark.skipif(on_win, reason="fortran compilers on win are hard.")
 def test_numpy_setup_py_data(test_config):
     recipe_path = os.path.join(metadata_dir, '_numpy_setup_py_data')
+    _hash = api.render(recipe_path, config=test_config, numpy="1.11")[0][0]._hash_dependencies()
     assert os.path.basename(api.get_output_file_path(recipe_path,
                             config=test_config, numpy="1.11")[0]) == \
-                            "load_setup_py_test-1.0a1-np111py{0}{1}_1.tar.bz2".format(
-                                sys.version_info.major, sys.version_info.minor)
+                            "load_setup_py_test-1.0a1-np111py{0}{1}{2}_1.tar.bz2".format(
+                                sys.version_info.major, sys.version_info.minor, _hash)
 
 
 def test_relative_git_url_submodule_clone(testing_workdir):
@@ -563,7 +561,7 @@ def test_relative_git_url_submodule_clone(testing_workdir):
         # This will (after one spin round the loop) install and run 'git' with the
         # build env prepended to os.environ[]
         output = api.get_output_file_path(testing_workdir)[0]
-        assert ("relative_submodules-{}-0".format(tag) in output)
+        assert ("relative_submodules-{}-".format(tag) in output)
         api.build(testing_workdir)
 
 

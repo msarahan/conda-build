@@ -45,22 +45,24 @@ def test_render_yaml_output(testing_workdir, test_config):
     assert "package:" in open(os.path.join(testing_workdir, "output.yaml")).read()
 
 
-def test_get_output_file_path(testing_workdir, test_config):
-    build_path = api.get_output_file_path(os.path.join(metadata_dir, "python_build"),
+def test_get_output_file_path(testing_workdir, test_metadata, test_config):
+    api.output_yaml(test_metadata, 'meta.yaml')
+
+    build_path = api.get_output_file_path(testing_workdir,
                                           config=test_config,
                                           no_download_source=True)[0]
+    _hash = test_metadata._hash_dependencies()
     assert build_path == os.path.join(test_config.croot, test_config.subdir,
-                                      "conda-build-test-python-build-1.0-0.tar.bz2")
-    build_path = api.get_output_file_path(os.path.join(metadata_dir, "python_build"),
-                                          config=test_config)[0]
-    assert build_path == os.path.join(test_config.croot, test_config.subdir,
-                                      "conda-build-test-python-build-1.0-0.tar.bz2")
+                                      "test_get_output_file_path-1.0-py{}{}_1.tar.bz2".format(
+                                          test_config.CONDA_PY, _hash))
 
 
 def test_get_output_file_path_metadata_object(test_config, test_metadata):
     build_path = api.get_output_file_path(test_metadata)[0]
+    _hash = test_metadata._hash_dependencies()
     assert build_path == os.path.join(test_config.croot, test_config.subdir,
-        "test_get_output_file_path_metadata_object-1.0-py{}_1.tar.bz2".format(test_config.CONDA_PY))
+                "test_get_output_file_path_metadata_object-1.0-py{}{}_1.tar.bz2".format(
+                    test_config.CONDA_PY, _hash))
 
 
 def test_get_output_file_path_jinja2(testing_workdir, test_config):

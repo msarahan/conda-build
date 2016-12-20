@@ -75,7 +75,7 @@ def test_render_output_build_path(testing_workdir, test_metadata, capfd, caplog)
     assert os.path.basename(output.rstrip()) == test_path, error
 
 
-def test_build_output_build_path(testing_workdir, test_config, capfd):
+def test_build_output_build_path(testing_workdir, test_metadata, test_config, capfd):
     api.output_yaml(test_metadata, 'meta.yaml')
     metadata = api.render(testing_workdir)[0][0]
     args = ['--output', os.path.join(testing_workdir)]
@@ -89,21 +89,25 @@ def test_build_output_build_path(testing_workdir, test_config, capfd):
     assert output.rstrip() == test_path, error
 
 
-def test_build_output_build_path_multiple_recipes(testing_workdir, test_config, capfd):
+def test_build_output_build_path_multiple_recipes(testing_workdir, test_metadata, test_config, capfd):
+    api.output_yaml(test_metadata, 'meta.yaml')
+    metadata = api.render(testing_workdir)[0][0]
+
     skip_recipe = os.path.join(metadata_dir, "build_skip")
-    args = ['--output', os.path.join(metadata_dir, "python_run"), skip_recipe]
+    args = ['--output', testing_workdir, skip_recipe]
 
     main_build.execute(args)
 
+    _hash = metadata._hash_dependencies()
     test_path = lambda pkg: os.path.join(sys.prefix, "conda-bld", test_config.subdir, pkg)
     test_paths = [test_path(
-        "conda-build-test-python-run-1.0-py{}{}_0.tar.bz2".format(
-        sys.version_info.major, sys.version_info.minor)),
+        "test_build_output_build_path_multiple_recipes-1.0-py{}{}{}_1.tar.bz2".format(
+            sys.version_info.major, sys.version_info.minor, _hash)),
         "Skipped: {} defines build/skip for this "
         "configuration.".format(os.path.abspath(skip_recipe))]
 
     output, error = capfd.readouterr()
-    assert error == ""
+    # assert error == ""
     assert output.rstrip().splitlines() == test_paths, error
 
 def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):

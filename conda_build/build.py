@@ -59,7 +59,7 @@ from conda_build.utils import (rm_rf, _check_call, copy_into, on_win, get_build_
                                silence_loggers, path_prepended, create_entry_points,
                                prepend_bin_path, codec, root_script_dir, print_skip_message,
                                ensure_list, get_lock, ExitStack, get_recipe_abspath, tmp_chdir,
-                               expand_globs)
+                               expand_globs, package_has_file)
 from conda_build.metadata import build_string_from_metadata
 from conda_build.index import update_index
 from conda_build.create_test import (create_files, create_shell_files,
@@ -351,6 +351,8 @@ def write_info_files_file(m, files, config):
                     fo.write(f.replace("bin", "python-scripts") + '\n')
                 elif f.startswith("Scripts") and (f not in entry_point_script_names):
                     fo.write(f.replace("Scripts", "python-scripts") + '\n')
+                else:
+                    fo.write(f + '\n')
         else:
             for f in files:
                 fo.write(f + '\n')
@@ -1407,6 +1409,11 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                                     test(pkg, config=config)
                                 # IOError means recipe was not included with package. use metadata
                                 except IOError:
+                                    # force the build string to line up - recomputing it would
+                                    #    yield a different result
+                                    index_contents = package_has_file(pkg, 'info/index.json')
+                                    build_str = json.loads(index_contents)['build']
+                                    metadata.meta['build']['string'] = build_str
                                     test(metadata, config=config)
                             built_packages.append(pkg)
                     else:
