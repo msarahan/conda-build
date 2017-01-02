@@ -1,0 +1,20 @@
+package:
+  name: _cross_helloworld
+  version: 1.0
+
+source:
+  path: ./src
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - xz
+  host:
+    - _cross_libgreeting
+
+build:
+  script:
+    - gcc helloworld.c -L${PREFIX}/lib -lgreeting -DGREETING_SUFFIX=$(xz --version | head -n 1) -o ${PREFIX}/bin/helloworld
+
+tests:
+  - strings ${PREFIX}/bin/helloworld | grep "XZ Utils"

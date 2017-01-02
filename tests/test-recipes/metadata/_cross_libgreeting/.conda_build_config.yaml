@@ -1,0 +1,2 @@
+c-compiler: "gcc-osx-64"
+target_platform: "imx351uc"
