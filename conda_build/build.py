@@ -967,6 +967,10 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             reparse(m, config=config)
             print("BUILD START (revised):", finalize_metadata(m).dist())
 
+        if 'host' in m.meta.get('requirements', {}):
+            specs = [ms.spec for ms in m.ms_depends('host')]
+            create_env(config.host_prefix, specs, config=config)
+
         final_metadata = finalize_metadata(m, config)
         print("Package:", finalize_metadata(m).dist())
 

@@ -775,3 +775,9 @@ def test_build_expands_wildcards(mocker, testing_workdir):
     output = [os.path.join(os.getcwd(), path, 'meta.yaml') for path in files]
     build_tree.assert_called_once_with(output, post=None, need_source_download=True,
                                        build_only=False, notest=False, config=config)
+
+
+@pytest.mark.skipif(sys.platform != 'linux', reason="cross compiler packages created only on Linux right now")
+def test_cross_compiler(testing_workdir):
+    recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
+    api.build(recipe_dir)

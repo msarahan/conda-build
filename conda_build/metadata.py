@@ -204,6 +204,7 @@ default_structs = {
     'build/features': list,
     'build/track_features': list,
     'requirements/build': list,
+    'requirements/host': list,
     'requirements/run': list,
     'requirements/conflicts': list,
     'requirements/preferred_env': text_type,
@@ -303,7 +304,7 @@ FIELDS = {
               'script_env', 'always_include_files', 'skip', 'msvc_compiler',
               'pin_depends', 'include_recipe'  # pin_depends is experimental still
               ],
-    'requirements': ['build', 'run', 'conflicts'],
+    'requirements': ['build', 'host', 'run', 'conflicts'],
     'app': ['entry', 'icon', 'summary', 'type', 'cli_opts',
             'own_environment'],
     'test': ['requires', 'commands', 'files', 'imports', 'source_files'],

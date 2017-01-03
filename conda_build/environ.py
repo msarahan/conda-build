@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+from glob import glob
 import json
 import logging
 import multiprocessing
@@ -239,6 +240,7 @@ def conda_build_vars(prefix, config):
         'ARCH': str(config.arch),
         'PREFIX': prefix,
         'SYS_PREFIX': sys.prefix,
+        'HOST_PREFIX': config.host_prefix,
         'SYS_PYTHON': sys.executable,
         'SUBDIR': config.subdir,
         'SRC_DIR': config.work_dir,
@@ -403,7 +405,11 @@ def osx_vars(compiler_vars, config):
 
 
 def linux_vars(compiler_vars, prefix, config):
-    compiler_vars['LD_RUN_PATH'] = prefix + '/lib'
+    # This is effectively saying "if any host env is installed, then prefer it over the build env"
+    if glob(os.path.join(config.host_prefix, '*')):
+        compiler_vars['LD_RUN_PATH'] = config.host_prefix + '/lib'
+    else:
+        compiler_vars['LD_RUN_PATH'] = prefix + '/lib'
     if config.arch == 32:
         compiler_vars['CFLAGS'] += ' -m32'
         compiler_vars['CXXFLAGS'] += ' -m32'
