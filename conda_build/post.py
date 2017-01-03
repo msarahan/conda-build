@@ -120,7 +120,8 @@ def remove_easy_install_pth(files, prefix, config, preserve_egg_dir=False):
                     # from another installed dependency
                     if os.path.exists(join(sp_dir, fn)):
                         try:
-                            utils.copy_into(join(egg_path, fn), join(sp_dir, fn), config.timeout)
+                            utils.copy_into(join(egg_path, fn), join(sp_dir, fn), config.timeout,
+                                            locking=config.locking)
                             utils.rm_rf(join(egg_path, fn))
                         except IOError as e:
                             fn = os.path.basename(str(e).split()[-1])
@@ -176,6 +177,8 @@ def rm_pyc(files, prefix):
 
 
 def compile_missing_pyc(files, cwd, python_exe, skip_compile_pyc=()):
+    if not os.path.isfile(python_exe):
+        return
     compile_files = []
     skip_compile_pyc_n = [os.path.normpath(skip) for skip in skip_compile_pyc]
     skipped_files = set()

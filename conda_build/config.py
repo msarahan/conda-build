@@ -16,7 +16,6 @@ from .conda_interface import string_types, binstar_upload
 
 from .utils import get_build_folders, rm_rf
 
-log = logging.getLogger(__file__)
 on_win = (sys.platform == 'win32')
 DEFAULT_PREFIX_LENGTH = 255
 
@@ -111,6 +110,8 @@ class Config(object):
                   Setting('output_folder', None),
                   Setting('prefix_length_fallback', True),
                   Setting('_prefix_length', DEFAULT_PREFIX_LENGTH),
+                  Setting('locking', True),
+                  Setting('max_env_retry', 3),
 
                   # variants
                   Setting('variant_config_files', []),
@@ -205,10 +206,7 @@ class Config(object):
 
     def _get_python(self, prefix):
         if sys.platform == 'win32':
-            from .conda_interface import linked
-            packages = linked(prefix)
-            packages_names = (pkg.split('-')[0] for pkg in packages)
-            if 'debug' in packages_names:
+            if os.path.isfile(os.path.join(prefix, 'python_d.exe')):
                 res = join(prefix, 'python_d.exe')
             else:
                 res = join(prefix, 'python.exe')
@@ -414,7 +412,8 @@ class Config(object):
 
     def __exit__(self, e_type, e_value, traceback):
         if not getattr(self, 'dirty') and not getattr(self, 'keep_old_work') and e_type is None:
-            log.info("--keep-old-work flag not specified.  Removing source and build files.\n")
+            logging.getLogger(__name__).info("--keep-old-work flag not specified.  "
+                                             "Removing source and build files.\n")
             self.clean()
 
 

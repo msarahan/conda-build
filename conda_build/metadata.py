@@ -33,7 +33,6 @@ except ImportError:
              'files of conda recipes)')
 
 on_win = (sys.platform == 'win32')
-log = logging.getLogger(__file__)
 
 HASH_LENGTH = 4
 
@@ -69,6 +68,7 @@ def ns_cfg(config):
         py33=bool(py == 33),
         py34=bool(py == 34),
         py35=bool(py == 35),
+        py36=bool(py == 36),
         np=np,
         os=os,
         environ=os.environ,
@@ -485,9 +485,13 @@ class MetaData(object):
         permit_undefined_jinja: If True, *any* use of undefined jinja variables will
                                 evaluate to an emtpy string, without emitting an error.
         """
+        log = logging.getLogger(__name__)
 
-        if not config:
-            config = self.config
+        if (isfile(self.requirements_path) and
+                not self.meta['requirements']['run']):
+            self.meta.setdefault('requirements', {})
+            run_requirements = specs_from_url(self.requirements_path)
+            self.meta['requirements']['run'] = run_requirements
 
         if variant:
             self.variant = variant
@@ -533,6 +537,7 @@ class MetaData(object):
             raise
         finally:
             del os.environ["CONDA_BUILD_STATE"]
+        self.validate_features()
 
     def parse_until_resolved(self, config, variant=None):
         """variant contains key-value mapping for additional functions and values
@@ -641,6 +646,7 @@ class MetaData(object):
         if res is None:
             sys.exit("Error: package/version missing in: %r" % self.meta_path)
         check_bad_chrs(res, 'package/version')
+        assert not res.startswith('.'), "Version can't start with leading period -  got %s" % res
         return res
 
     def build_number(self):
@@ -703,8 +709,8 @@ class MetaData(object):
         # create a frozen dictionary of the requirements section
         # sort it
         # hash the sorted dictionary
-        # save only the first HASH_LENGTH characters - should be more than enough, since these only need to
-        #    be unique within one version
+        # save only the first HASH_LENGTH characters - should be more than enough, since these only
+        #    need to be unique within one version
         sections = ['source', 'requirements', 'build']
         composite = HashableDict({section: self.get_section(section) for section in sections})
         # remove the build number from the hash, so that we can bump it without changing the hash
@@ -998,3 +1004,8 @@ class MetaData(object):
                                 vcs = "mercurial"
                             return vcs
         return None
+
+    def validate_features(self):
+        if any('-' in feature for feature in self.get_value('build/features')):
+            raise ValueError("- is a disallowed character in features.  Please change this "
+                             "character in your recipe.")

@@ -50,7 +50,7 @@ def create_files(dir_path, m, config):
     for fn in ensure_list(m.get_value('test/files', [])):
         has_files = True
         path = join(m.path, fn)
-        copy_into(path, join(dir_path, fn), config.timeout)
+        copy_into(path, join(dir_path, fn), config.timeout, locking=config.locking)
     # need to re-download source in order to do tests
     if m.get_value('test/source_files') and not isdir(config.work_dir):
         source.provide(m, config=config)
@@ -63,7 +63,8 @@ def create_files(dir_path, m, config):
         if not files:
             raise RuntimeError("Did not find any source_files for test with pattern %s", pattern)
         for f in files:
-            copy_into(f, f.replace(config.work_dir, config.test_dir), config.timeout)
+            copy_into(f, f.replace(config.work_dir, config.test_dir), config.timeout,
+                      locking=config.locking)
         for ext in '.pyc', '.pyo':
             for f in get_ext_files(config.test_dir, ext):
                 os.remove(f)
@@ -75,6 +76,8 @@ def create_shell_files(dir_path, m, config):
     ext = '.bat' if sys.platform == 'win32' else '.sh'
     name = 'no-file'
 
+    # the way this works is that each output needs to explicitly define a test script to run.
+    #   They do not automatically pick up run_test.*, but can be pointed at that explicitly.
     for out in m.meta.get('outputs', []):
         if m.name() == out['name']:
             out_test_script = out.get('test', {}).get('script', 'no-file')
@@ -85,7 +88,7 @@ def create_shell_files(dir_path, m, config):
         name = "run_test{}".format(ext)
 
     if exists(join(m.path, name)):
-        copy_into(join(m.path, name), dir_path, config.timeout)
+        copy_into(join(m.path, name), dir_path, config.timeout, locking=config.locking)
         has_tests = True
 
     with open(join(dir_path, name), 'a') as f:
@@ -115,6 +118,8 @@ def create_py_files(dir_path, m):
 
         try:
             name = 'run_test.py'
+            # the way this works is that each output needs to explicitly define a test script to run
+            #   They do not automatically pick up run_test.*, but can be pointed at that explicitly.
             for out in m.meta.get('outputs', []):
                 if m.name() == out['name']:
                     out_test_script = out.get('test', {}).get('script', 'no-file')
@@ -160,6 +165,9 @@ def create_pl_files(dir_path, m):
 
         try:
             name = 'run_test.pl'
+
+            # the way this works is that each output needs to explicitly define a test script to run
+            #   They do not automatically pick up run_test.*, but can be pointed at that explicitly.
             for out in m.meta.get('outputs', []):
                 if m.name() == out['name']:
                     out_test_script = out.get('test', {}).get('script', 'no-file')

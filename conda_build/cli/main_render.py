@@ -16,7 +16,7 @@ from conda_build.render import render_recipe, set_language_env_vars, bldpkg_path
 from conda_build.completers import (RecipeCompleter, PythonVersionCompleter, RVersionsCompleter,
                                     LuaVersionsCompleter, NumPyVersionCompleter)
 from conda_build.config import Config
-from conda_build.utils import silence_loggers
+from conda_build.utils import LoggingContext
 
 on_win = (sys.platform == 'win32')
 
@@ -52,44 +52,34 @@ source to try fill in related template variables.",
     p.add_argument(
         '--python',
         action="append",
-        help="""Set the Python version used by conda build. Can be passed
-        multiple times to build against multiple versions. Can be 'all' to
-    build against all known versions (%r)""" % [i for i in
-    PythonVersionCompleter() if '.' in i],
+        help="Set the Python version used by conda build.",
         metavar="PYTHON_VER",
         choices=PythonVersionCompleter(),
     )
     p.add_argument(
         '--perl',
         action="append",
-        help="""Set the Perl version used by conda build. Can be passed
-        multiple times to build against multiple versions.""",
+        help="Set the Perl version used by conda build.",
         metavar="PERL_VER",
     )
     p.add_argument(
         '--numpy',
         action="append",
-        help="""Set the NumPy version used by conda build. Can be passed
-        multiple times to build against multiple versions. Can be 'all' to
-    build against all known versions (%r)""" % [i for i in
-    NumPyVersionCompleter() if '.' in i],
+        help="Set the NumPy version used by conda build.",
         metavar="NUMPY_VER",
         choices=NumPyVersionCompleter(),
     )
     p.add_argument(
         '--R',
         action="append",
-        help="""Set the R version used by conda build. Can be passed
-        multiple times to build against multiple versions.""",
+        help="""Set the R version used by conda build.""",
         metavar="R_VER",
         choices=RVersionsCompleter(),
     )
     p.add_argument(
         '--lua',
         action="append",
-        help="Set the Lua version used by conda build. Can be passed"
-        "multiple times to build against multiple versions (%r)." %
-        [i for i in LuaVersionsCompleter()],
+        help="Set the Lua version used by conda build.",
         metavar="LUA_VER",
         choices=LuaVersionsCompleter(),
     )
@@ -147,10 +137,9 @@ def execute(args):
 
     metadata_tuples = render_recipe(args.recipe, config=config, no_download_source=args.no_source)
     if args.output:
-        logging.basicConfig(level=logging.ERROR)
-        silence_loggers(show_warnings_and_errors=False)
-        for (metadata, _, _) in metadata_tuples:
-            print(bldpkg_path(metadata))
+        with LoggingContext(logging.CRITICAL + 1):
+            for (metadata, _, _) in metadata_tuples:
+                print(bldpkg_path(metadata))
     else:
         logging.basicConfig(level=logging.INFO)
         for (metadata, _, _) in metadata_tuples:

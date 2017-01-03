@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import base64
 from collections import defaultdict
 import contextlib
 import fnmatch
@@ -13,18 +14,17 @@ from os.path import dirname, getmtime, getsize, isdir, join, isfile, abspath
 import re
 import stat
 import subprocess
-
 import sys
 import shutil
 import tarfile
 import tempfile
+import time
 import zipfile
 
 import filelock
 
 from .conda_interface import md5_file, unix_path_to_win, win_path_to_unix
 from .conda_interface import PY3, iteritems
-from .conda_interface import linked
 from .conda_interface import root_dir
 from .conda_interface import string_types
 
@@ -42,8 +42,6 @@ else:
     from contextlib2 import ExitStack  # NOQA
 
 
-log = logging.getLogger(__file__)
-
 # elsewhere, kept here for reduced duplication.  NOQA because it is not used in this file.
 from .conda_interface import rm_rf  # NOQA
 
@@ -51,7 +49,6 @@ on_win = (sys.platform == 'win32')
 
 codec = getpreferredencoding() or 'utf-8'
 on_win = sys.platform == "win32"
-log = logging.getLogger(__file__)
 root_script_dir = os.path.join(root_dir, 'Scripts' if on_win else 'bin')
 
 
@@ -92,10 +89,33 @@ def get_recipe_abspath(recipe):
     return recipe_dir, need_cleanup
 
 
-def copy_into(src, dst, timeout=90, symlinks=False, lock=None):
-    "Copy all the files and directories in src to the directory dst"
+@contextlib.contextmanager
+def try_acquire_locks(locks, timeout):
+    """Try to acquire all locks.  If any lock can't be immediately acquired, free all locks
+
+    http://stackoverflow.com/questions/9814008/multiple-mutex-locking-strategies-and-why-libraries-dont-use-address-comparison
+    """
+    t = time.time()
+    while (time.time() - t < timeout):
+        for lock in locks:
+            try:
+                lock.acquire(timeout=0.1)
+            except filelock.Timeout:
+                for lock in locks:
+                    lock.release()
+                break
+        break
+    yield
+    for lock in locks:
+        if lock:
+            lock.release()
+
+
+def copy_into(src, dst, timeout=90, symlinks=False, lock=None, locking=True):
+    """Copy all the files and directories in src to the directory dst"""
+    log = logging.getLogger(__name__)
     if isdir(src):
-        merge_tree(src, dst, symlinks, timeout=timeout, lock=lock)
+        merge_tree(src, dst, symlinks, timeout=timeout, lock=lock, locking=locking)
 
     else:
         if isdir(dst):
@@ -119,7 +139,9 @@ def copy_into(src, dst, timeout=90, symlinks=False, lock=None):
 
         if not lock:
             lock = get_lock(src_folder, timeout=timeout)
-        with lock:
+        if locking:
+            locks = [lock]
+        with try_acquire_locks(locks, timeout):
             # if intermediate folders not not exist create them
             dst_folder = os.path.dirname(dst)
             if dst_folder and not os.path.exists(dst_folder):
@@ -186,7 +208,7 @@ def copytree(src, dst, symlinks=False, ignore=None, dry_run=False):
     return dst_lst
 
 
-def merge_tree(src, dst, symlinks=False, timeout=90, lock=None):
+def merge_tree(src, dst, symlinks=False, timeout=90, lock=None, locking=True):
     """
     Merge src into dst recursively by copying all files from src into dst.
     Return a list of all files copied.
@@ -208,7 +230,9 @@ def merge_tree(src, dst, symlinks=False, timeout=90, lock=None):
 
     if not lock:
         lock = get_lock(src, timeout=timeout)
-    with lock:
+    if locking:
+        locks = [lock]
+    with try_acquire_locks(locks, timeout):
         copytree(src, dst, symlinks=symlinks)
 
 
@@ -220,12 +244,25 @@ _locations = {}
 
 def get_lock(folder, timeout=90, filename=".conda_lock"):
     global _locations
-    location = os.path.abspath(os.path.normpath(folder))
-    if not os.path.isdir(location):
-        os.makedirs(location)
+    try:
+        location = os.path.abspath(os.path.normpath(folder))
+    except OSError:
+        location = folder
+    b_location = location
+    if hasattr(b_location, 'encode'):
+        b_location = b_location.encode()
+    lock_filename = base64.urlsafe_b64encode(b_location)[:20]
+    if hasattr(lock_filename, 'decode'):
+        lock_filename = lock_filename.decode()
+    locks_dir = os.path.join(root_dir, 'locks')
+    if not os.path.isdir(locks_dir):
+        os.makedirs(locks_dir)
+    lock_file = os.path.join(locks_dir, lock_filename)
+    if not os.path.isfile(lock_file):
+        with open(lock_file, 'a') as f:
+            f.write(location)
     if location not in _locations:
-        _locations[location] = filelock.SoftFileLock(os.path.join(location, filename),
-                                                     timeout)
+        _locations[location] = filelock.FileLock(lock_file, timeout)
     return _locations[location]
 
 
@@ -449,25 +486,6 @@ def get_build_folders(croot):
     return glob(os.path.join(croot, "*" + "[0-9]" * 10 + "*"))
 
 
-def silence_loggers(show_warnings_and_errors=True):
-    if show_warnings_and_errors:
-        log_level = logging.WARN
-    else:
-        log_level = logging.CRITICAL + 1
-    logging.getLogger(os.path.dirname(__file__)).setLevel(log_level)
-    # This squelches a ton of conda output that is not hugely relevant
-    logging.getLogger("conda").setLevel(log_level)
-    logging.getLogger("binstar").setLevel(log_level)
-    logging.getLogger("install").setLevel(log_level + 10)
-    logging.getLogger("conda.install").setLevel(log_level + 10)
-    logging.getLogger("fetch").setLevel(log_level)
-    logging.getLogger("print").setLevel(log_level)
-    logging.getLogger("progress").setLevel(log_level)
-    logging.getLogger("dotupdate").setLevel(log_level)
-    logging.getLogger("stdoutlog").setLevel(log_level)
-    logging.getLogger("requests").setLevel(log_level)
-
-
 def prepend_bin_path(env, prefix, prepend_prefix=False):
     # bin_dirname takes care of bin on *nix, Scripts on win
     env['PATH'] = join(prefix, bin_dirname) + os.pathsep + env['PATH']
@@ -529,9 +547,7 @@ def create_entry_point(path, module, func, config):
     pyscript = PY_TMPL % {'module': module, 'func': func}
     if sys.platform == 'win32':
         with open(path + '-script.py', 'w') as fo:
-            packages = linked(config.build_prefix)
-            packages_names = (pkg.split('-')[0] for pkg in packages)
-            if 'debug' in packages_names:
+            if os.path.isfile(os.path.join(config.build_prefix, 'python_d.exe')):
                 fo.write('#!python_d\n')
             fo.write(pyscript)
         copy_into(join(dirname(__file__), 'cli-{}.exe'.format(config.arch)),
@@ -708,3 +724,32 @@ class HashableDict(dict):
 
     def __hash__(self):
         return hash(json.dumps(self, sort_keys=True))
+
+
+class LoggingContext(object):
+    loggers = ['conda', 'binstar', 'install', 'conda.install', 'fetch', 'print', 'progress',
+               'dotupdate', 'stdoutlog', 'requests']
+
+    def __init__(self, level=logging.WARN, handler=None, close=True):
+        self.level = level
+        self.old_levels = {}
+        self.handler = handler
+        self.close = close
+
+    def __enter__(self):
+        for logger in LoggingContext.loggers:
+            log = logging.getLogger(logger)
+            self.old_levels[logger] = log.level
+            log.setLevel(self.level if ('install' not in logger or
+                                        self.level < logging.INFO) else self.level + 10)
+        if self.handler:
+            self.logger.addHandler(self.handler)
+
+    def __exit__(self, et, ev, tb):
+        for logger, level in self.old_levels.items():
+            logging.getLogger(logger).setLevel(level)
+        if self.handler:
+            self.logger.removeHandler(self.handler)
+        if self.handler and self.close:
+            self.handler.close()
+        # implicit return of None => don't swallow exceptions

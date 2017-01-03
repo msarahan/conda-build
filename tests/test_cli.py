@@ -16,6 +16,7 @@ from conda_build.tarcheck import TarCheck
 
 from conda_build import api
 from conda_build.utils import get_site_packages, on_win, get_build_folders, package_has_file
+from conda_build.conda_interface import TemporaryDirectory
 from .utils import (testing_workdir, metadata_dir, testing_env, test_config, test_metadata,
                     put_bad_conda_on_path)
 
@@ -31,7 +32,8 @@ import conda_build.cli.main_index as main_index
 
 
 def test_build():
-    args = ['--no-anaconda-upload', os.path.join(metadata_dir, "empty_sections"), '--no-activate']
+    args = ['--no-anaconda-upload', os.path.join(metadata_dir, "empty_sections"), '--no-activate',
+            '--no-anaconda-upload']
     main_build.execute(args)
 
 
@@ -47,7 +49,7 @@ def test_build_add_channel():
     """This recipe requires the blinker package, which is only on conda-forge.
     This verifies that the -c argument works."""
 
-    args = ['--no-anaconda-upload', '-c', 'conda_build_test', '--no-activate',
+    args = ['--no-anaconda-upload', '-c', 'conda_build_test', '--no-activate', '--no-anaconda-upload',
             os.path.join(metadata_dir, "_recipe_requiring_external_channel")]
     main_build.execute(args)
 
@@ -61,11 +63,10 @@ def test_build_without_channel_fails(testing_workdir):
     main_build.execute(args)
 
 
-def test_render_output_build_path(testing_workdir, test_metadata, capfd, caplog):
+def test_render_output_build_path(testing_workdir, test_metadata, capfd):
     api.output_yaml(test_metadata, 'meta.yaml')
     metadata = api.render(testing_workdir)[0][0]
     args = ['--output', os.path.join(testing_workdir)]
-    #with caplog.at_level(logging.WARN):
     main_render.execute(args)
     _hash = metadata._hash_dependencies()
     test_path = "test_render_output_build_path-1.0-py{}{}{}_1.tar.bz2".format(
@@ -95,7 +96,6 @@ def test_build_output_build_path_multiple_recipes(testing_workdir, test_metadata
 
     skip_recipe = os.path.join(metadata_dir, "build_skip")
     args = ['--output', testing_workdir, skip_recipe]
-
     main_build.execute(args)
 
     _hash = metadata._hash_dependencies()
@@ -110,28 +110,48 @@ def test_build_output_build_path_multiple_recipes(testing_workdir, test_metadata
     # assert error == ""
     assert output.rstrip().splitlines() == test_paths, error
 
+
 def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):
-    args = [os.path.join(metadata_dir, "has_prefix_files"), '--croot', test_config.croot]
-    outputs = main_build.execute(args)
-    data = package_has_file(outputs[0], 'binary-has-prefix')
+    recipe_path = os.path.join(metadata_dir, "has_prefix_files" + os.path.sep)
+    fn = api.get_output_file_path(recipe_path, config=test_config)
+    args = [os.path.join(metadata_dir, "has_prefix_files"), '--croot', test_config.croot,
+            '--no-anaconda-upload']
+    main_build.execute(args)
+    data = package_has_file(fn, 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')
     assert 'has_prefix_files_1' in data
 
 
-def test_build_no_build_id(testing_workdir, test_config, capfd):
+def test_build_no_build_id(testing_workdir, test_config):
     args = [os.path.join(metadata_dir, "has_prefix_files"), '--no-build-id',
-            '--croot', test_config.croot, '--no-activate']
-    outputs = main_build.execute(args)
-    data = package_has_file(outputs[0], 'binary-has-prefix')
+            '--croot', test_config.croot, '--no-activate', '--no-anaconda-upload']
+    main_build.execute(args)
+    fn = api.get_output_file_path(os.path.join(metadata_dir, "has_prefix_files"),
+                                  config=test_config)
+    data = package_has_file(fn, 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')
     assert 'has_prefix_files_1' not in data
 
 
+def test_build_output_folder(testing_workdir, test_metadata, capfd):
+    api.output_yaml(test_metadata, 'meta.yaml')
+    with TemporaryDirectory() as tmp:
+        out = os.path.join(tmp, 'out')
+        args = [testing_workdir, '--no-build-id',
+                '--croot', tmp, '--no-activate', '--no-anaconda-upload',
+                '--output-folder', out]
+        main_build.execute(args)
+        test_metadata.config.output_folder = out
+        output, error = capfd.readouterr()
+        assert "anaconda upload {}".format(out) in output
+
+
 def test_render_output_build_path_set_python(testing_workdir, test_metadata, capfd):
+    api.output_yaml(test_metadata, 'meta.yaml')
     # build the other major thing, whatever it is
     if sys.version_info.major == 3:
         version = "2.7"
@@ -157,7 +177,7 @@ def test_skeleton_pypi(testing_workdir, test_config):
     assert os.path.isdir('click')
 
     # ensure that recipe generated is buildable
-    args = ['click', '--no-anaconda-upload', '--croot', test_config.croot, '--no-activate',]
+    args = ['click', '--no-anaconda-upload', '--croot', test_config.croot, '--no-activate']
     main_build.execute(args)
 
 
@@ -273,6 +293,7 @@ def test_inspect_objects(testing_workdir, capfd):
         assert 'rpath: @loader_path' in output
 
 
+@pytest.mark.serial
 @pytest.mark.skipif(on_win, reason="Windows prefix length doesn't matter (yet?)")
 def test_inspect_prefix_length(testing_workdir, capfd):
     from conda_build import api
@@ -297,6 +318,7 @@ def test_inspect_prefix_length(testing_workdir, capfd):
     assert 'No packages found with binary prefixes shorter' in output
 
 
+@pytest.mark.serial
 def test_develop(testing_env):
     f = "https://pypi.io/packages/source/c/conda_version_test/conda_version_test-0.1.0-1.tar.gz"
     download(f, "conda_version_test.tar.gz")
