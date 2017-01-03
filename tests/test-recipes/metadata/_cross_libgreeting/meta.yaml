@@ -2,6 +2,9 @@ package:
   name: _cross_libgreeting
   version: 1.0
 
+source:
+  path: ./src
+
 requirements:
   build:
     - {{ compiler('c') }}

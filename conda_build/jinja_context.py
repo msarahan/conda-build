@@ -204,26 +204,32 @@ def load_file_regex(config, load_file, regex_pattern, from_recipe_dir=False,
     return match if match else None
 
 
-def pin_compatible(config, package_name, version, package_table=None):
+def pin_compatible(config, package_name, package_table=None, permit_undefined_jinja=True):
     """Query a compatibility database, or just guess about compatibility based on semantic
     versioning.  Returns string with guess about compatible pinning."""
+    log = logging.getLogger(__name__)
     packages = get_installed_packages(config.build_prefix)
-    for package in packages:
-        name, version, buildnum = package.split()
-        if name == package_name:
-            versions = version.split('.')
-            if name in package_table:
-                # Look up compatibilty in table
-                compatibility = package_table[name]
-            else:
-                try:
-                    log.info('Package %s does not have compatibilty entry.  Assuming semantic '
-                             'versioning style, and allowing bug-fix revisions.  '
-                             'Please add package to lookup table if necessary.', name)
-                    compatibility = ".".join(versions[0], versions[1], '*')
-                except IndexError:
-                    log.warn('Package %s does not follow semantic versioning style.  '
-                             'Please add package to lookup table for compatible pinning.', name)
+    compatibility = None
+    if packages.get(package_name):
+        version = packages[package_name]['version']
+        if package_table and package_name in package_table:
+            # Look up compatibilty in table - TODO: need to factor version into this somehow
+            compatibility = package_table[package_name]
+        else:
+            try:
+                log.info('Package %s does not have compatibilty entry.  Assuming semantic '
+                            'versioning style, and allowing bug-fix revisions.  '
+                            'Please add package to lookup table if necessary.', package_name)
+                versions = version.split('.')
+                compatibility = ">=" + version + "," + ".".join([versions[0], versions[1], '*'])
+            except IndexError:
+                raise RuntimeError('Package {} does not follow semantic versioning style.  '
+                                   'Please add package to lookup table for compatible '
+                                   'pinning.'.format(package_name))
+
+    if not compatibility and not permit_undefined_jinja:
+        raise RuntimeError("Could not get compatibility information for {} package.  Is the "
+                            "build environment created?".format(package_name))
     return compatibility
 
 
@@ -276,7 +282,7 @@ def _native_compiler(language, config, variant):
     return compiler
 
 
-def compiler(language, config, variant):
+def compiler(language, config, variant, permit_undefined_jinja=False):
     """Support configuration of compilers.  This is somewhat platform specific.
 
     Native compilers never list their host - it is always implied.  Generally, they are
@@ -285,7 +291,7 @@ def compiler(language, config, variant):
     native architecture).
     """
     native_compiler = _native_compiler(language, config, variant)
-    language_compiler_key = '{}-compiler'.format(language)
+    language_compiler_key = '{}_compiler'.format(language)
     # fall back to native if language-compiler is not explicitly set in variant
     compiler = variant.get(language_compiler_key, native_compiler)
 
@@ -297,12 +303,42 @@ def compiler(language, config, variant):
     # Note that the host needs to be part of the compiler.  Right now, that means that the compiler
     #    needs to be defined in the variant - not just the native default
     if 'target_platform' in variant:
-        if language_compiler_key not in variant:
+        if language_compiler_key in variant:
+            compiler = '-'.join([variant[language_compiler_key], variant['target_platform']])
+        # This is not defined in early stages of parsing.  Let it by if permit_undefined_jinja set
+        elif not permit_undefined_jinja:
             raise ValueError("{0} must be set in variant config in order to use target_platform."
-                             "Please set it to the name of the package, including the host "
+                             "  Please set it to the name of the package, including the host "
                              "(e.g. gcc-centos5)".format(language_compiler_key))
-        compiler = '-'.join([variant[language_compiler_key], variant['target_platform']])
     return compiler
+
+
+def runtime(language, config, variant, permit_undefined_jinja=False):
+    """Support configuration of runtimes.  This is somewhat platform specific.
+
+    Native compilers never list their host - it is always implied.  Generally, they are
+    metapackages, pointing at a package that does specify the host.  These in turn may be
+    metapackages, pointing at a package where the host is the same as the target (both being the
+    native architecture).
+    """
+    native_compiler = _native_compiler(language, config, variant)
+    language_compiler_key = '{}_compiler'.format(language)
+    # fall back to native if language-compiler is not explicitly set in variant
+    compiler = variant.get(language_compiler_key, native_compiler)
+    try:
+        if 'runtimes' in variant:
+            runtime = variant['runtimes'][compiler]
+        else:
+            runtime = runtimes[compiler]
+    except KeyError:
+        raise KeyError("Conda-build doesn't know which runtime goes with the {} compiler.  "
+                        "Please provide a 'runtimes' section in your variant configuration, "
+                        "with the key being your compiler, and the value being the runtime "
+                        "package name.".format(compiler))
+
+    if 'target_platform' in variant:
+        runtime = '-'.join([runtime, variant['target_platform']])
+    return runtime
 
 
 def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jinja, variant):
@@ -326,8 +362,13 @@ def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jin
         load_file_regex=partial(load_file_regex, config=config, recipe_dir=recipe_dir,
                                 permit_undefined_jinja=permit_undefined_jinja),
         installed=get_installed_packages(os.path.join(config.build_prefix, 'conda-meta')),
-        pin_compatible=partial(pin_compatible, config),
-        compiler=partial(compiler, variant=variant, config=config),
+        pin_compatible=partial(pin_compatible, config,
+                               permit_undefined_jinja=permit_undefined_jinja),
+        compiler=partial(compiler, variant=variant, config=config,
+                         permit_undefined_jinja=permit_undefined_jinja),
+
+        runtime=partial(runtime, variant=variant, config=config,
+                         permit_undefined_jinja=permit_undefined_jinja),
         variant=variant,
         environ=environ)
     return ctx

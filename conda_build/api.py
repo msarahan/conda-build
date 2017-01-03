@@ -278,10 +278,9 @@ def inspect_prefix_length(packages, min_prefix_length=_prefix_length):
 
 def create_metapackage(name, version, entry_points=(), build_string=None, build_number=0,
                        dependencies=(), home=None, license_name=None, summary=None,
-                       config=None):
+                       config=None, **kwargs):
     from .metapackage import create_metapackage
-    if not config:
-        config = Config()
+    config = get_or_merge_config(config, **kwargs)
     return create_metapackage(name=name, version=version, entry_points=entry_points,
                               build_string=build_string, build_number=build_number,
                               dependencies=dependencies, home=home,

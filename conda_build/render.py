@@ -7,8 +7,8 @@
 from __future__ import absolute_import, division, print_function
 
 import copy
-import functools
 from locale import getpreferredencoding
+import logging
 import os
 from os.path import isdir, isfile, abspath
 import subprocess
@@ -20,11 +20,10 @@ import yaml
 
 from .conda_interface import PY3
 
-from conda_build import exceptions, utils
+from conda_build import exceptions, utils, environ
 from conda_build.metadata import MetaData
 import conda_build.source as source
 from conda_build.completers import all_versions, conda_version
-from conda_build.utils import rm_rf, get_installed_packages
 from conda_build.variants import get_package_variants
 
 
@@ -109,7 +108,8 @@ def parse_or_try_download(metadata, no_download_source, config,
         metadata = copy.deepcopy(metadata)
         try:
             metadata.parse_until_resolved(config=config, variant=variant)
-        except exceptions.UnableToParseMissingSetuptoolsDependencies:
+            need_reparse_in_env = False
+        except (RuntimeError, exceptions.UnableToParseMissingSetuptoolsDependencies):
             need_reparse_in_env = True
         output.append((metadata, need_source_download, need_reparse_in_env))
     return output
@@ -124,6 +124,7 @@ def reparse(metadata, config):
 
 
 def render_recipe(recipe_path, config, no_download_source=False):
+    log = logging.getLogger(__file__)
     arg = recipe_path
     # Don't use byte literals for paths in Python 2
     if not PY3:
@@ -166,10 +167,17 @@ def render_recipe(recipe_path, config, no_download_source=False):
         raise ValueError("no_download_source specified, but can't fully render recipe without"
                          " downloading source.  Please fix the recipe, or don't use "
                          "no_download_source.")
+    for entry in rendered_metadata:
+        if entry[2]:
+            log.warn("Need to create build environment to fully render this recipe.  Doing so.")
+            specs = [ms.spec for ms in entry[0].ms_depends('build')]
+            environ.create_env(config.build_prefix, specs, config=config)
+        reparse(entry[0], config)
+
     config.noarch = bool(m.get_value('build/noarch'))
 
     if need_cleanup:
-        rm_rf(recipe_dir)
+        utils.rm_rf(recipe_dir)
 
     return rendered_metadata
 

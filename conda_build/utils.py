@@ -28,6 +28,7 @@ from .conda_interface import md5_file, unix_path_to_win, win_path_to_unix
 from .conda_interface import PY3, iteritems
 from .conda_interface import root_dir
 from .conda_interface import string_types
+from .conda_interface import url_path, get_index
 
 from conda_build.os_utils import external
 
@@ -754,3 +755,30 @@ class LoggingContext(object):
         if self.handler and self.close:
             self.handler.close()
         # implicit return of None => don't swallow exceptions
+
+
+def get_build_index(config, clear_cache=True):
+    # priority: local by croot (can vary), then channels passed as args,
+    #     then channels from config.
+    urls = [url_path(config.croot)] + list(config.channel_urls)
+    index = get_index(channel_urls=urls,
+                      prepend=not config.override_channels,
+                      use_local=False,
+                      use_cache=not clear_cache)
+    return index
+
+
+# http://stackoverflow.com/a/10743550/1170370
+@contextlib.contextmanager
+def capture():
+    import sys
+    from cStringIO import StringIO
+    oldout, olderr = sys.stdout, sys.stderr
+    try:
+        out = [StringIO(), StringIO()]
+        sys.stdout, sys.stderr = out
+        yield out
+    finally:
+        sys.stdout, sys.stderr = oldout, olderr
+        out[0] = out[0].getvalue()
+        out[1] = out[1].getvalue()

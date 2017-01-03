@@ -181,7 +181,7 @@ def rewrite_file_with_new_prefix(path, data, old_prefix, new_prefix):
 def get_run_dists(m, config):
     prefix = join(envs_dirs[0], '_run')
     utils.rm_rf(prefix)
-    create_env(prefix, [ms.spec for ms in m.ms_depends('run')], config=config)
+    environ.create_env(prefix, [ms.spec for ms in m.ms_depends('run')], config=config)
     return sorted(linked(prefix))
 
 
@@ -614,17 +614,6 @@ def create_info_files_json_v1(m, info_dir, prefix, files, files_with_prefix):
                   cls=EntityEncoder)
 
 
-def get_build_index(config, clear_cache=True):
-    # priority: local by croot (can vary), then channels passed as args,
-    #     then channels from config.
-    urls = [url_path(config.croot)] + list(config.channel_urls)
-    index = get_index(channel_urls=urls,
-                      prepend=not config.override_channels,
-                      use_local=False,
-                      use_cache=not clear_cache)
-    return index
-
-
 def recursive_req_folders(folders, start_specs, index):
     """Get folders """
     for folder in start_specs:
@@ -634,165 +623,6 @@ def recursive_req_folders(folders, start_specs, index):
             recursive_req_folders(folders, val['requires'], index)
         folders.extend([key.replace('.tar.bz2', "") for key in matching_keys.keys()])
     return folders
-
-
-def create_env(prefix, specs, config, clear_cache=True, retry=0):
-    '''
-    Create a conda envrionment for the given prefix and specs.
-    '''
-    if config.debug:
-        logging.getLogger("conda_build").setLevel(logging.DEBUG)
-        external_logger_context = utils.LoggingContext(logging.DEBUG)
-    else:
-        logging.getLogger("conda_build").setLevel(logging.INFO)
-        external_logger_context = utils.LoggingContext(logging.ERROR)
-
-    with external_logger_context:
-        log = logging.getLogger(__name__)
-
-        if os.path.isdir(prefix):
-            utils.rm_rf(prefix)
-
-        specs = list(specs)
-        for feature, value in feature_list:
-            if value:
-                specs.append('%s@' % feature)
-
-        if specs:  # Don't waste time if there is nothing to do
-            log.debug("Creating environment in %s", prefix)
-            log.debug(str(specs))
-
-            with utils.path_prepended(prefix):
-                locks = []
-                try:
-                    if config.locking:
-                        cc.pkgs_dirs = cc.pkgs_dirs[:1]
-                        locked_folders = cc.pkgs_dirs + list(config.bldpkgs_dirs)
-                        for folder in locked_folders:
-                            if not os.path.isdir(folder):
-                                os.makedirs(folder)
-                            lock = utils.get_lock(folder, timeout=config.timeout)
-                            if not folder.endswith('pkgs'):
-                                update_index(folder, config=config, lock=lock,
-                                             could_be_mirror=False)
-                            locks.append(lock)
-                        # lock used to generally indicate a conda operation occurring
-                        locks.append(utils.get_lock('conda-operation', timeout=config.timeout))
-
-                    with utils.try_acquire_locks(locks, timeout=config.timeout):
-                        index = get_build_index(config=config, clear_cache=True)
-                        actions = plan.install_actions(prefix, index, specs)
-                        if config.disable_pip:
-                            actions['LINK'] = [spec for spec in actions['LINK'] if not spec.startswith('pip-')]  # noqa
-                            actions['LINK'] = [spec for spec in actions['LINK'] if not spec.startswith('setuptools-')]  # noqa
-                        plan.display_actions(actions, index)
-                        if utils.on_win:
-                            for k, v in os.environ.items():
-                                os.environ[k] = str(v)
-                        plan.execute_actions(actions, index, verbose=config.debug)
-                        warn_on_old_conda_build(index=index)
-                except (SystemExit, PaddingError, LinkError) as exc:
-                    if (("too short in" in str(exc) or
-                            'post-link failed for: openssl' in str(exc) or
-                            isinstance(exc, PaddingError)) and
-                            config.prefix_length > 80):
-                        if config.prefix_length_fallback:
-                            log.warn("Build prefix failed with prefix length %d",
-                                     config.prefix_length)
-                            log.warn("Error was: ")
-                            log.warn(str(exc))
-                            log.warn("One or more of your package dependencies needs to be rebuilt "
-                                    "with a longer prefix length.")
-                            log.warn("Falling back to legacy prefix length of 80 characters.")
-                            log.warn("Your package will not install into prefixes > 80 characters.")
-                            config.prefix_length = 80
-
-                            # Set this here and use to create environ
-                            #   Setting this here is important because we use it below (symlink)
-                            prefix = config.build_prefix
-
-                            create_env(prefix, specs, config=config,
-                                        clear_cache=clear_cache)
-                        else:
-                            raise
-                    elif 'lock' in str(exc):
-                        if retry < config.max_env_retry:
-                            log.warn("failed to create env, retrying.  exception was: %s", str(exc))
-                            create_env(prefix, specs, config=config,
-                                    clear_cache=clear_cache, retry=retry + 1)
-                # HACK: some of the time, conda screws up somehow and incomplete packages result.
-                #    Just retry.
-                except (AssertionError, IOError, ValueError, RuntimeError, LockError) as exc:
-                    if retry < config.max_env_retry:
-                        log.warn("failed to create env, retrying.  exception was: %s", str(exc))
-                        create_env(prefix, specs, config=config,
-                                   clear_cache=clear_cache, retry=retry + 1)
-                    else:
-                        log.error("Failed to create env, max retries exceeded.")
-                        raise
-
-    # ensure prefix exists, even if empty, i.e. when specs are empty
-    if not isdir(prefix):
-        os.makedirs(prefix)
-    if utils.on_win:
-        shell = "cmd.exe"
-    else:
-        shell = "bash"
-    symlink_conda(prefix, sys.prefix, shell)
-
-
-def get_installed_conda_build_version():
-    root_linked = linked(root_dir)
-    vers_inst = [dist.split('::', 1)[-1].rsplit('-', 2)[1] for dist in root_linked
-        if dist.split('::', 1)[-1].rsplit('-', 2)[0] == 'conda-build']
-    if not len(vers_inst) == 1:
-        logging.getLogger(__name__).warn("Could not detect installed version of conda-build")
-        return None
-    return vers_inst[0]
-
-
-def get_conda_build_index_versions(index):
-    r = Resolve(index)
-    pkgs = []
-    try:
-        pkgs = r.get_pkgs(MatchSpec('conda-build'))
-    except (NoPackagesFound, NoPackagesFoundError):
-        logging.getLogger(__name__).warn("Could not find any versions of conda-build "
-                                         "in the channels")
-    return [pkg.version for pkg in pkgs]
-
-
-def filter_non_final_releases(pkg_list):
-    """cuts out packages wth rc/alpha/beta.
-
-    VersionOrder described in conda/version.py
-
-    Basically, it breaks up the version into pieces, and depends on version
-    formats like x.y.z[alpha/beta]
-    """
-    return [pkg for pkg in pkg_list if len(VersionOrder(pkg).version[3]) == 1]
-
-
-def warn_on_old_conda_build(index=None, installed_version=None, available_packages=None):
-    if not installed_version:
-        installed_version = get_installed_conda_build_version() or "0.0.0"
-    if not available_packages:
-        if index:
-            available_packages = get_conda_build_index_versions(index)
-        else:
-            raise ValueError("Must provide either available packages or"
-                             " index to warn_on_old_conda_build")
-    available_packages = sorted(filter_non_final_releases(available_packages), key=VersionOrder)
-    if (len(available_packages) > 0 and installed_version and
-            VersionOrder(installed_version) < VersionOrder(available_packages[-1])):
-        print("""
-WARNING: conda-build appears to be out of date. You have version %s but the
-latest version is %s. Run
-
-conda update -n root conda-build
-
-to get the latest version.
-""" % (installed_version, available_packages[-1]), file=sys.stderr)
 
 
 def filter_files(files_list, prefix, filter_patterns=('.*[\\\\/]?\.git[\\\\/].*', )):
@@ -929,7 +759,7 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
         specs = [ms.spec for ms in m.ms_depends('build')]
         if any(out.get('type') == 'wheel' for out in m.meta.get('outputs', [])):
             specs.extend(['pip', 'wheel'])
-        create_env(config.build_prefix, specs, config=config)
+        environ.create_env(config.build_prefix, specs, config=config)
         vcs_source = m.uses_vcs_in_build
         if vcs_source and vcs_source not in specs:
             vcs_executable = "hg" if vcs_source == "mercurial" else vcs_source
@@ -947,7 +777,7 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
 
                     # Display the name only
                     # Version number could be missing due to dependency on source info.
-                    create_env(config.build_prefix, specs, config=config)
+                    environ.create_env(config.build_prefix, specs, config=config)
                 else:
                     raise ValueError("Your recipe uses mercurial in build, but mercurial"
                                     " does not yet support Python 3.  Please handle all of "
@@ -969,7 +799,7 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
 
         if 'host' in m.meta.get('requirements', {}):
             specs = [ms.spec for ms in m.ms_depends('host')]
-            create_env(config.host_prefix, specs, config=config)
+            environ.create_env(config.host_prefix, specs, config=config)
 
         final_metadata = finalize_metadata(m, config)
         print("Package:", finalize_metadata(m).dist())
@@ -1273,7 +1103,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
             # not sure how this shakes out
             specs += ['lua %s*' % environ.get_lua_ver(config)]
 
-        create_env(config.test_prefix, specs, config=config)
+        environ.create_env(config.test_prefix, specs, config=config)
 
         with utils.path_prepended(config.test_prefix):
             env = dict(os.environ.copy())
@@ -1614,7 +1444,7 @@ def is_package_built(metadata, config):
         if not os.path.isdir(d):
             os.makedirs(d)
         update_index(d, config, could_be_mirror=False)
-    index = get_build_index(config=config, clear_cache=True)
+    index = utils.get_build_index(config=config, clear_cache=True)
 
     urls = [url_path(config.croot)] + get_rc_urls() + get_local_urls() + ['local', ]
     if config.channel_urls:

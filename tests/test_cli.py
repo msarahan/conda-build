@@ -2,8 +2,8 @@
 #   because they actually provide coverage.  These tests are here to make
 #   sure that the CLI still works.
 
+from glob import glob
 import json
-import logging
 import os
 import subprocess
 import sys
@@ -213,37 +213,38 @@ def test_skeleton_pypi_arguments_work(testing_workdir, test_config):
 
 def test_metapackage(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
-    args = ['metapackage_test', '1.0', '-d', 'bzip2']
+    args = ['metapackage_test', '1.0', '-d', 'bzip2', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
-                             'metapackage_test-1.0-0.tar.bz2')
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+                             'metapackage_test-1.0*_0.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
 
 def test_metapackage_build_number(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
-    args = ['metapackage_test_build_number', '1.0', '-d', 'bzip2', '--build-number', '1']
+    args = ['metapackage_test_build_number', '1.0', '-d', 'bzip2', '--build-number', '1', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
-                             'metapackage_test_build_number-1.0-1.tar.bz2')
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+                             'metapackage_test_build_number-1.0-*_1.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
 
 def test_metapackage_build_string(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
-    args = ['metapackage_test_build_string', '1.0', '-d', 'bzip2', '--build-string', 'frank']
+    args = ['metapackage_test_build_string', '1.0', '-d', 'bzip2', '--build-string', 'frank', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
-                             'metapackage_test_build_string-1.0-frank.tar.bz2')
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+                             'metapackage_test_build_string-1.0-frank*.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
 
 def test_metapackage_metadata(test_config, testing_workdir):
     args = ['metapackage_test_metadata', '1.0', '-d', 'bzip2', "--home", "http://abc.com",
-            "--summary", "wee", "--license", "BSD"]
+            "--summary", "wee", "--license", "BSD", '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
-                             'metapackage_test_metadata-1.0-0.tar.bz2')
+
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+                             'metapackage_test_metadata-1.0-*_0.tar.bz2'))[0]
     assert os.path.isfile(test_path)
     info = json.loads(package_has_file(test_path, 'info/index.json').decode('utf-8'))
     assert info['license'] == 'BSD'

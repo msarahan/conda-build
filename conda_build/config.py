@@ -100,7 +100,7 @@ class Config(object):
                   Setting('skip_existing', False),
                   Setting('token', None),
                   Setting('user', None),
-                  Setting('verbose', False),
+                  Setting('verbose', True),
                   Setting('debug', False),
                   Setting('timeout', 90),
                   Setting('arch', subdir.split('-')[-1]),

@@ -182,9 +182,9 @@ def test_native_compiler_metadata_osx(test_config):
 
 
 def test_compiler_metadata_cross_compiler():
-    variant = {'c-compiler': 'c-compiler-linux',
-               'cxx-compiler': 'cxx-compiler-linux',
-               'fortran-compiler': 'fortran-compiler-linux',
+    variant = {'c_compiler': 'c-compiler-linux',
+               'cxx_compiler': 'cxx-compiler-linux',
+               'fortran_compiler': 'fortran-compiler-linux',
                'target_platform': 'macos'}
     metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), variant=variant)
     assert 'c-compiler-linux-macos' in metadata.meta['requirements']['build']

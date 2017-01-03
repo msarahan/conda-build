@@ -568,7 +568,7 @@ class MetaData(object):
                      "source downloading and try again.".format(self.undefined_jinja_vars))
 
         # always parse again at the end, too.
-        self.parse_again(config, permit_undefined_jinja=True, variant=variant)
+        self.parse_again(config, permit_undefined_jinja=False, variant=variant)
 
     @classmethod
     def fromstring(cls, metadata, config=None):

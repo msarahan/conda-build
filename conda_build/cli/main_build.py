@@ -229,11 +229,11 @@ different sets of packages."""
 def output_action(recipe, config):
     with LoggingContext(logging.CRITICAL + 1):
         metadata_tuples = api.render(recipe, config=config)
-        for (metadata, _, _) in metadata_tuples:
-            if metadata.skip():
-                print_skip_message(metadata)
-            else:
-                print(bldpkg_path(metadata))
+    for (metadata, _, _) in metadata_tuples:
+        if metadata.skip():
+            print_skip_message(metadata)
+        else:
+            print(bldpkg_path(metadata))
 
 
 def source_action(metadata, config):
@@ -285,9 +285,9 @@ def execute(args):
     action = None
     if args.output:
         action = output_action
-        logging.basicConfig(level=logging.ERROR)
         config.verbose = False
         config.quiet = True
+        config.debug = False
     elif args.test:
         action = test_action
     elif args.source:

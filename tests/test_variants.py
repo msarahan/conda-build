@@ -8,13 +8,13 @@ from .utils import testing_workdir, test_config
 
 import yaml
 
-global_specs = {"python": ["2.7", "3.5"],
-                "numpy": ["1.10", "1.11"]}
+global_specs = {"python": ["2.7.*", "3.5.*"],
+                "numpy": ["1.10.*", "1.11.*"]}
 
-single_version = {"python": "2.7",
-                  "numpy": "1.10"}
+single_version = {"python": "2.7.*",
+                  "numpy": "1.11.*"}
 
-no_numpy_version = {"python": ["2.7", "3.5"]}
+no_numpy_version = {"python": ["2.7.*", "3.5.*"]}
 
 thisdir = os.path.dirname(__file__)
 
@@ -23,7 +23,7 @@ def test_later_spec_priority():
     # override a single key
     combined_spec = variants.combine_specs([global_specs, single_version])
     assert len(combined_spec) == 2
-    assert combined_spec["python"] == "2.7"
+    assert combined_spec["python"] == "2.7.*"
 
     # keep keys that are not overwritten
     combined_spec = variants.combine_specs([single_version, no_numpy_version])

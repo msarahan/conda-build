@@ -84,7 +84,8 @@ def test_get_output_file_path_jinja2(testing_workdir, test_config):
     _hash = metadata._hash_dependencies()
     assert build_path == os.path.join(test_config.croot, test_config.subdir,
                                       "conda-build-test-source-git-jinja2-1.20.2-"
-                                      "py{0}{1}_0_g262d444.tar.bz2".format(test_config.CONDA_PY, _hash))
+                                      "py{0}{1}_0_g262d444.tar.bz2".format(test_config.CONDA_PY,
+                                                                           _hash))
 
 
 @mock.patch('conda_build.source')
@@ -92,3 +93,13 @@ def test_output_without_jinja_does_not_download(mock_source, testing_workdir, te
         api.get_output_file_path(os.path.join(metadata_dir, "source_git"),
                                               config=test_config)[0]
         mock_source.provide.assert_not_called()
+
+
+def test_pin_compatible_semver(test_config):
+    recipe_dir = os.path.join(metadata_dir, '_pin_compatible')
+    metadata = api.render(recipe_dir, config=test_config)[0][0]
+    assert 'numpy >=1.11.2,1.11.*' in metadata.get_value('requirements/run')
+    # not terribly important, but might be nice for continuity's sake
+    #    This is broken right now, because compound pins like we do here have never been supported
+    #    in the build string.
+    # assert 'np111' in api.get_output_file_path(metadata)
