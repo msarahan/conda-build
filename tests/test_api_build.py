@@ -777,7 +777,10 @@ def test_build_expands_wildcards(mocker, testing_workdir):
                                        build_only=False, notest=False, config=config)
 
 
-@pytest.mark.skipif(sys.platform != 'linux', reason="cross compiler packages created only on Linux right now")
-def test_cross_compiler(testing_workdir):
+@pytest.mark.skipif(not sys.platform.startswith('linux'),
+                    reason="cross compiler packages created only on Linux right now")
+def test_cross_compiler(testing_workdir, test_config):
+    # TODO: testing purposes.  Package on @mingwandroid's channel.
+    test_config.channel_urls = ('rdonnelly', )
     recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
     api.build(recipe_dir)
