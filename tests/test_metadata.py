@@ -187,9 +187,9 @@ def test_compiler_metadata_cross_compiler():
                'fortran_compiler': 'fortran-compiler-linux',
                'target_platform': 'macos'}
     metadata = MetaData(os.path.join(metadata_dir, '_compiler_jinja2'), variant=variant)
-    assert 'c-compiler-linux-macos' in metadata.meta['requirements']['build']
-    assert 'cxx-compiler-linux-macos' in metadata.meta['requirements']['build']
-    assert 'fortran-compiler-linux-macos' in metadata.meta['requirements']['build']
+    assert 'c-compiler-linux_macos' in metadata.meta['requirements']['build']
+    assert 'cxx-compiler-linux_macos' in metadata.meta['requirements']['build']
+    assert 'fortran-compiler-linux_macos' in metadata.meta['requirements']['build']
 
 
 def test_hash_build_id(test_metadata):

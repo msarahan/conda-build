@@ -296,15 +296,15 @@ def compiler(language, config, variant, permit_undefined_jinja=False):
     compiler = variant.get(language_compiler_key, native_compiler)
 
     # support cross compilers.  A cross-compiler package will have a name such as
-    #    gcc-host-target
-    #    gcc-centos5-centos5
-    #    gcc-centos7-centos5
+    #    gcc_host_target
+    #    gcc_centos5_centos5
+    #    gcc_centos7_centos5
     #
     # Note that the host needs to be part of the compiler.  Right now, that means that the compiler
     #    needs to be defined in the variant - not just the native default
     if 'target_platform' in variant:
         if language_compiler_key in variant:
-            compiler = '-'.join([variant[language_compiler_key], variant['target_platform']])
+            compiler = '_'.join([variant[language_compiler_key], variant['target_platform']])
         # This is not defined in early stages of parsing.  Let it by if permit_undefined_jinja set
         elif not permit_undefined_jinja:
             raise ValueError("{0} must be set in variant config in order to use target_platform."
@@ -337,7 +337,7 @@ def runtime(language, config, variant, permit_undefined_jinja=False):
                         "package name.".format(compiler))
 
     if 'target_platform' in variant:
-        runtime = '-'.join([runtime, variant['target_platform']])
+        runtime = '_'.join([runtime, variant['target_platform']])
     return runtime
 
 
