@@ -123,9 +123,11 @@ def test_no_anaconda_upload_condarc(service_name, testing_workdir, test_config, 
 
 
 def test_git_describe_info_on_branch(test_config):
-    output = api.get_output_file_path(os.path.join(metadata_dir, "_git_describe_number_branch"))[0]
+    recipe_path = os.path.join(metadata_dir, "_git_describe_number_branch")
+    output = api.get_output_file_path(recipe_path)[0]
+    _hash = api.render(recipe_path, config=test_config)[0][0]._hash_dependencies()
     test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
-                             "git_describe_number_branch-1.20.2-1_g82c6ba6.tar.bz2")
+                             "git_describe_number_branch-1.20.2-{}_1_g82c6ba6.tar.bz2".format(_hash))
     assert test_path == output
 
 
@@ -161,11 +163,12 @@ def test_early_abort(test_config, capfd):
 
 
 def test_output_build_path_git_source(testing_workdir, test_config):
-    output = api.get_output_file_path(os.path.join(metadata_dir, "source_git_jinja2"),
-                                      config=test_config)[0]
+    recipe_path = os.path.join(metadata_dir, "source_git_jinja2")
+    output = api.get_output_file_path(recipe_path, config=test_config)[0]
+    _hash = api.render(recipe_path, config=test_config)[0][0]._hash_dependencies()
     test_path = os.path.join(test_config.croot, test_config.subdir,
-                     "conda-build-test-source-git-jinja2-1.20.2-py{}{}_0_g262d444.tar.bz2".format(
-                                      sys.version_info.major, sys.version_info.minor))
+                             "conda-build-test-source-git-jinja2-1.20.2-py{}{}{}_0_g262d444.tar.bz2".format(
+                                 sys.version_info.major, sys.version_info.minor, _hash))
     assert output == test_path
 
 

@@ -56,7 +56,7 @@ import conda_build.os_utils.external as external
 from conda_build.post import (post_process, post_build,
                               fix_permissions, get_build_metadata)
 
-from conda_build.metadata import build_string_from_metadata
+from conda_build.metadata import build_string_from_metadata, HASH_LENGTH
 from conda_build.index import update_index
 from conda_build.create_test import (create_files, create_shell_files,
                                      create_py_files, create_pl_files)
@@ -185,6 +185,38 @@ def get_run_dists(m, config):
     return sorted(linked(prefix))
 
 
+def finalize_metadata(m, config=None):
+    """Fully render a recipe.  Fill in versions for build dependencies."""
+    if not config:
+        config = m.config
+    rendered_metadata = copy.deepcopy(m)
+    # fill in build versions used
+    build_deps = []
+    # we only care if we actually have build deps.  Otherwise, the environment will not be
+    #    valid for inspection.
+    if m.meta.get('requirements') and m.meta['requirements'].get('build'):
+        build_deps = environ.Environment(m.config.build_prefix).package_specs()
+
+    if not rendered_metadata.meta.get('build'):
+        rendered_metadata.meta['build'] = {}
+    # hard-code build string so that any future "renderings" can't go wrong based on user env
+    rendered_metadata.meta['build']['string'] = m.build_id()
+
+    rendered_metadata.meta['requirements'] = rendered_metadata.meta.get('requirements', {})
+    rendered_metadata.meta['requirements']['build'] = build_deps
+
+    # if source/path is relative, then the output package makes no sense at all.  The next
+    #   best thing is to hard-code the absolute path.  This probably won't exist on any
+    #   system other than the original build machine, but at least it will work there.
+    if m.meta.get('source'):
+        if 'path' in m.meta['source'] and not os.path.isabs(m.meta['source']['path']):
+            rendered_metadata.meta['source']['path'] = os.path.normpath(
+                os.path.join(m.path, m.meta['source']['path']))
+        elif ('git_url' in m.meta['source'] and not os.path.isabs(m.meta['source']['git_url'])):
+            rendered_metadata.meta['source']['git_url'] = os.path.normpath(
+                os.path.join(m.path, m.meta['source']['git_url']))
+    return rendered_metadata
+
 def copy_recipe(m, config):
     if config.include_recipe and m.include_recipe():
         recipe_dir = join(config.info_dir, 'recipe')
@@ -207,34 +239,7 @@ def copy_recipe(m, config):
         else:
             original_recipe = ""
 
-        rendered_metadata = copy.deepcopy(m)
-        # fill in build versions used
-        build_deps = []
-        # we only care if we actually have build deps.  Otherwise, the environment will not be
-        #    valid for inspection.
-        if m.meta.get('requirements') and m.meta['requirements'].get('build'):
-            build_deps = environ.Environment(m.config.build_prefix).package_specs()
-
-        if not rendered_metadata.meta.get('build'):
-            rendered_metadata.meta['build'] = {}
-        # hard-code build string so that any future "renderings" can't go wrong based on user env
-        rendered_metadata.meta['build']['string'] = m.build_id()
-
-        rendered_metadata.meta['requirements'] = rendered_metadata.meta.get('requirements', {})
-        rendered_metadata.meta['requirements']['build'] = build_deps
-
-        # if source/path is relative, then the output package makes no sense at all.  The next
-        #   best thing is to hard-code the absolute path.  This probably won't exist on any
-        #   system other than the original build machine, but at least it will work there.
-        if m.meta.get('source'):
-            if 'path' in m.meta['source'] and not os.path.isabs(m.meta['source']['path']):
-                rendered_metadata.meta['source']['path'] = os.path.normpath(
-                    os.path.join(m.path, m.meta['source']['path']))
-            elif ('git_url' in m.meta['source'] and not os.path.isabs(m.meta['source']['git_url'])):
-                rendered_metadata.meta['source']['git_url'] = os.path.normpath(
-                    os.path.join(m.path, m.meta['source']['git_url']))
-
-        rendered = output_yaml(rendered_metadata)
+        rendered = output_yaml(finalize_metadata(m, config))
         if not original_recipe or not open(original_recipe).read() == rendered:
             with open(join(recipe_dir, "meta.yaml"), 'w') as f:
                 f.write("# This file created by conda-build {}\n".format(__version__))
@@ -267,6 +272,13 @@ def copy_license(m, config):
         utils.copy_into(join(config.work_dir, license_file),
                         join(config.info_dir, 'LICENSE.txt'), config.timeout,
                         locking=config.locking)
+
+
+def write_hash_input(m, config):
+    final_metadata = finalize_metadata(m, config)
+    hash_input = final_metadata._get_hash_dictionary()
+    with open(os.path.join(config.info_dir, 'hash_input.json'), 'w') as f:
+        json.dump(hash_input, f)
 
 
 def get_files_with_prefix(m, files, prefix):
@@ -487,6 +499,7 @@ def create_info_files(m, files, config, prefix):
     copy_readme(m, config)
     copy_license(m, config)
 
+    write_hash_input(m, config)
     write_info_json(m, config)  # actually index.json
     write_about_json(m, config)
     write_package_metadata_json(m, config)
@@ -945,11 +958,8 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             # This makes it possible to provide source fetchers (eg. git, hg, svn) as build
             # dependencies.
             with utils.path_prepended(config.build_prefix):
-                m, need_source_download, need_reparse_in_env = parse_or_try_download(m,
-                                                                no_download_source=False,
-                                                                force_download=True,
-                                                                config=config)
-            assert not need_source_download, "Source download failed.  Please investigate."
+                source.provide(m, config)
+            reparse(m, config=config)
             if m.uses_jinja:
                 print("BUILD START (revised):", m.dist())
 
@@ -957,7 +967,7 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             reparse(m, config=config)
             print("BUILD START (revised):", m.dist())
 
-        print("Package:", m.dist())
+        print("Package:", finalize_metadata(m).dist())
 
         # get_dir here might be just work, or it might be one level deeper,
         #    dependening on the source.
@@ -1188,7 +1198,10 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
         # This will create a new local build folder if and only if config doesn't already have one.
         #   What this means is that if we're running a test immediately after build, we use the one
         #   that the build already provided
-        metadata_tuples = render_recipe(recipe_dir, config=config)
+        try:
+            metadata_tuples = render_recipe(recipe_dir, config=config)
+        except IOError:
+            raise IOError("Didn't find recipe in folder or package under test.  Can't test this after exiting build.")
         # this recipe came from an extracted tarball.
         if need_cleanup:
             # ensure that the local location of the package is indexed, so that conda can find the
@@ -1214,7 +1227,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
 
     for (metadata, _, _) in metadata_tuples:
         config.compute_build_id(metadata.name())
-        clean_pkg_cache(metadata.dist(), config.timeout)
+        clean_pkg_cache(metadata.dist(), config)
         create_files(config.test_dir, metadata, config)
         # Make Perl or Python-specific test files
         if metadata.name().startswith('perl-'):
@@ -1241,7 +1254,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
 
         # add packages listed in the run environment and test/requires
         specs.extend(ms.spec for ms in metadata.ms_depends('run'))
-        specs += ensure_list(metadata.get_value('test/requires', []))
+        specs += utils.ensure_list(metadata.get_value('test/requires', []))
 
         if py_files:
             # as the tests are run by python, ensure that python is installed.
@@ -1257,7 +1270,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
 
         create_env(config.test_prefix, specs, config=config)
 
-        with path_prepended(config.test_prefix):
+        with utils.path_prepended(config.test_prefix):
             env = dict(os.environ.copy())
             env.update(environ.get_dict(config=config, m=metadata, prefix=config.test_prefix))
             env["CONDA_BUILD_STATE"] = "TEST"
@@ -1266,9 +1279,9 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
 
         if not config.activate:
             # prepend bin (or Scripts) directory
-            env = prepend_bin_path(env, config.test_prefix, prepend_prefix=True)
+            env = utils.prepend_bin_path(env, config.test_prefix, prepend_prefix=True)
 
-            if on_win:
+            if utils.on_win:
                 env['PATH'] = config.test_prefix + os.pathsep + env['PATH']
 
         for varname in 'CONDA_PY', 'CONDA_NPY', 'CONDA_PERL', 'CONDA_LUA':
@@ -1276,49 +1289,49 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
 
         # Python 2 Windows requires that envs variables be string, not unicode
         env = {str(key): str(value) for key, value in env.items()}
-        suffix = "bat" if on_win else "sh"
+        suffix = "bat" if utils.on_win else "sh"
         test_script = join(config.test_dir, "conda_test_runner.{suffix}".format(suffix=suffix))
 
         with open(test_script, 'w') as tf:
             if config.activate:
-                ext = ".bat" if on_win else ""
+                ext = ".bat" if utils.on_win else ""
                 tf.write('{source} "{conda_root}activate{ext}" "{test_env}" {squelch}\n'.format(
-                    conda_root=root_script_dir + os.path.sep,
-                    source="call" if on_win else "source",
+                    conda_root=utils.root_script_dir + os.path.sep,
+                    source="call" if utils.on_win else "source",
                     ext=ext,
                     test_env=config.test_prefix,
-                    squelch=">nul 2>&1" if on_win else "&> /dev/null"))
-                if on_win:
+                    squelch=">nul 2>&1" if utils.on_win else "&> /dev/null"))
+                if utils.on_win:
                     tf.write("if errorlevel 1 exit 1\n")
             if py_files:
                 tf.write("{python} -s {test_file}\n".format(
                     python=config.test_python,
                     test_file=join(config.test_dir, 'run_test.py')))
-                if on_win:
+                if utils.on_win:
                     tf.write("if errorlevel 1 exit 1\n")
             if pl_files:
                 tf.write("{perl} {test_file}\n".format(
                     perl=config.test_perl,
                     test_file=join(config.test_dir, 'run_test.pl')))
-                if on_win:
+                if utils.on_win:
                     tf.write("if errorlevel 1 exit 1\n")
             if lua_files:
                 tf.write("{lua} {test_file}\n".format(
                     lua=config.test_lua,
                     test_file=join(config.test_dir, 'run_test.lua')))
-                if on_win:
+                if utils.on_win:
                     tf.write("if errorlevel 1 exit 1\n")
             if shell_files:
                 test_file = join(config.test_dir, 'run_test.' + suffix)
-                if on_win:
+                if utils.on_win:
                     tf.write("call {test_file}\n".format(test_file=test_file))
-                    if on_win:
+                    if utils.on_win:
                         tf.write("if errorlevel 1 exit 1\n")
                 else:
                     # TODO: Run the test/commands here instead of in run_test.py
                     tf.write("{shell_path} -x -e {test_file}\n".format(shell_path=shell_path,
                                                                         test_file=test_file))
-        if on_win:
+        if utils.on_win:
             cmd = ['cmd.exe', "/d", "/c", test_script]
         else:
             cmd = [shell_path, '-x', '-e', test_script]
@@ -1329,7 +1342,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
                          config=config)
 
         if need_cleanup:
-            rm_rf(recipe_dir)
+            utils.rm_rf(recipe_dir)
 
         print("TEST END:", metadata.dist())
     return True
@@ -1443,7 +1456,7 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                                 except IOError:
                                     # force the build string to line up - recomputing it would
                                     #    yield a different result
-                                    index_contents = package_has_file(pkg, 'info/index.json')
+                                    index_contents = utils.package_has_file(pkg, 'info/index.json')
                                     build_str = json.loads(index_contents)['build']
                                     metadata.meta['build']['string'] = build_str
                                     test(metadata, config=config)

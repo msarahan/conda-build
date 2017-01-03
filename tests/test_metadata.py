@@ -6,7 +6,7 @@ import pytest
 
 from conda_build.conda_interface import MatchSpec
 
-from conda_build.metadata import select_lines, handle_config_version, expand_globs, MetaData
+from conda_build.metadata import select_lines, handle_config_version, MetaData
 from .utils import testing_workdir, test_config, test_metadata, thisdir, metadata_dir
 
 
@@ -218,7 +218,7 @@ def test_hash_build_id_key_order(test_metadata):
 
 def test_hash_applies_to_custom_build_string(test_metadata):
     test_metadata.meta['build']['string'] = 'steve'
-    assert test_metadata.build_id() == 'steveh6666'
+    assert test_metadata.build_id() == 'steveh8302'
 
 
 def test_disallow_leading_period_in_version(test_metadata):

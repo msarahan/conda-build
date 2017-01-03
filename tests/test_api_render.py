@@ -17,7 +17,7 @@ def test_render_need_download(testing_workdir, test_config):
     # first, test that the download/render system renders all it can,
     #    and accurately returns its needs
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, SystemExit)):
         metadata, need_download, need_reparse_in_env = api.render(
             os.path.join(metadata_dir, "source_git_jinja2"),
             config=test_config,
@@ -71,15 +71,20 @@ def test_get_output_file_path_jinja2(testing_workdir, test_config):
     #    being cleaned as it should.
 
     # First get metadata with a recipe that is known to need a download:
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, SystemExit)):
         build_path = api.get_output_file_path(os.path.join(metadata_dir, "source_git_jinja2"),
                                               config=test_config,
                                               no_download_source=True)[0]
     build_path = api.get_output_file_path(os.path.join(metadata_dir, "source_git_jinja2"),
                                           config=test_config)[0]
+    metadata, need_download, need_reparse_in_env = api.render(
+        os.path.join(metadata_dir, "source_git_jinja2"),
+        config=test_config,
+        no_download_source=False)[0]
+    _hash = metadata._hash_dependencies()
     assert build_path == os.path.join(test_config.croot, test_config.subdir,
                                       "conda-build-test-source-git-jinja2-1.20.2-"
-                                      "py{0}_0_g262d444.tar.bz2".format(test_config.CONDA_PY))
+                                      "py{0}{1}_0_g262d444.tar.bz2".format(test_config.CONDA_PY, _hash))
 
 
 @mock.patch('conda_build.source')

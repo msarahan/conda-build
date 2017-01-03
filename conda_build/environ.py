@@ -332,6 +332,7 @@ def meta_vars(meta, config):
     d['PKG_BUILDNUM'] = str(meta.build_number())
     d['PKG_BUILD_STRING'] = str(meta.build_id())
     d['RECIPE_DIR'] = meta.path
+    d['RECIPE_HASH'] = meta._hash_dependencies()
     return d
 
 

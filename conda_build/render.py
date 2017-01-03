@@ -78,7 +78,6 @@ def bldpkg_path(m):
 
 def parse_or_try_download(metadata, no_download_source, config,
                           force_download=False):
-
     need_reparse_in_env = True
     need_source_download = True
     if (force_download or (not no_download_source and metadata.needs_source_for_render)):
@@ -90,7 +89,7 @@ def parse_or_try_download(metadata, no_download_source, config,
                     source.provide(metadata, config=config)
                 need_source_download = False
             try:
-                metadata.parse_again(config=config, permit_undefined_jinja=False)
+                metadata.parse_again(permit_undefined_jinja=False)
                 need_reparse_in_env = False
             except (ImportError, exceptions.UnableToParseMissingSetuptoolsDependencies):
                 pass  # we just don't alter the need_reparse_in_env variable

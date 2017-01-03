@@ -112,12 +112,10 @@ def test_build_output_build_path_multiple_recipes(testing_workdir, test_metadata
 
 
 def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):
-    recipe_path = os.path.join(metadata_dir, "has_prefix_files" + os.path.sep)
-    fn = api.get_output_file_path(recipe_path, config=test_config)
     args = [os.path.join(metadata_dir, "has_prefix_files"), '--croot', test_config.croot,
             '--no-anaconda-upload']
-    main_build.execute(args)
-    data = package_has_file(fn, 'binary-has-prefix')
+    outputs = main_build.execute(args)
+    data = package_has_file(outputs[0], 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')
@@ -127,10 +125,8 @@ def test_slash_in_recipe_arg_keeps_build_id(testing_workdir, test_config):
 def test_build_no_build_id(testing_workdir, test_config):
     args = [os.path.join(metadata_dir, "has_prefix_files"), '--no-build-id',
             '--croot', test_config.croot, '--no-activate', '--no-anaconda-upload']
-    main_build.execute(args)
-    fn = api.get_output_file_path(os.path.join(metadata_dir, "has_prefix_files"),
-                                  config=test_config)
-    data = package_has_file(fn, 'binary-has-prefix')
+    output = main_build.execute(args)[0]
+    data = package_has_file(output, 'binary-has-prefix')
     assert data
     if hasattr(data, 'decode'):
         data = data.decode('UTF-8')

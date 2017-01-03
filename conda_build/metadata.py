@@ -487,14 +487,16 @@ class MetaData(object):
         """
         log = logging.getLogger(__name__)
 
-        if (isfile(self.requirements_path) and
-                not self.meta['requirements']['run']):
+        if isfile(self.requirements_path) and not self.get_value('requirements/run'):
             self.meta.setdefault('requirements', {})
             run_requirements = specs_from_url(self.requirements_path)
             self.meta['requirements']['run'] = run_requirements
 
         if variant:
             self.variant = variant
+
+        if not config:
+            config = self.config
 
         os.environ["CONDA_BUILD_STATE"] = "RENDER"
         append_sections_file = None
@@ -701,22 +703,26 @@ class MetaData(object):
             res.append(ms)
         return res
 
-    def _hash_dependencies(self):
-        """With arbitrary pinning, we can't depend on the build string as done in
-        build_string_from_metadata - there's just too much info.  Instead, we keep that as-is, to
-        not be disruptive, but we add this extra hash, which is just a way of distinguishing files
-        on disk.  The actual determination of dependencies is done in the repository metadata."""
-        # create a frozen dictionary of the requirements section
-        # sort it
-        # hash the sorted dictionary
-        # save only the first HASH_LENGTH characters - should be more than enough, since these only
-        #    need to be unique within one version
+    def _get_hash_dictionary(self):
         sections = ['source', 'requirements', 'build']
         composite = HashableDict({section: self.get_section(section) for section in sections})
         # remove the build number from the hash, so that we can bump it without changing the hash
         if 'number' in composite['build']:
             del composite['build']['number']
-        return 'h' + str(abs(hash(composite)))[:HASH_LENGTH]
+        # remove the build string, so that hashes don't affect themselves
+        if 'string' in composite['build']:
+            del composite['build']['string']
+        return composite
+
+    def _hash_dependencies(self):
+        """With arbitrary pinning, we can't depend on the build string as done in
+        build_string_from_metadata - there's just too much info.  Instead, we keep that as-is, to
+        not be disruptive, but we add this extra hash, which is just a way of distinguishing files
+        on disk.  The actual determination of dependencies is done in the repository metadata."""
+
+        # save only the first HASH_LENGTH characters - should be more than enough, since these only
+        #    need to be unique within one version
+        return 'h' + str(abs(hash(self._get_hash_dictionary())))[:HASH_LENGTH]
 
     def build_id(self):
         out = self.get_value('build/string')
