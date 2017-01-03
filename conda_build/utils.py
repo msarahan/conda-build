@@ -3,6 +3,7 @@ from __future__ import absolute_import, division, print_function
 import base64
 from collections import defaultdict
 import contextlib
+import copy
 import fnmatch
 from glob import glob
 import json
@@ -720,7 +721,7 @@ class HashableDict(dict):
     """
     def __init__(self, *args, **kwargs):
         super(HashableDict, self).__init__(*args, **kwargs)
-        _convert_lists_to_sets(self)
+        self = _convert_lists_to_sets(self)
 
     def __hash__(self):
         return hash(json.dumps(self, sort_keys=True))

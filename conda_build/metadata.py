@@ -1,5 +1,6 @@
 from __future__ import absolute_import, division, print_function
 
+import copy
 import logging
 import os
 from os.path import isfile, join
@@ -540,6 +541,15 @@ class MetaData(object):
         finally:
             del os.environ["CONDA_BUILD_STATE"]
         self.validate_features()
+        self.ensure_no_pip_requirements()
+
+    def ensure_no_pip_requirements(self):
+        keys = 'requirements/build', 'requirements/run', 'test/requires'
+        for key in keys:
+            if any(hasattr(item, 'keys') for item in self.get_value(key)):
+                raise ValueError("Dictionaries are not supported as values in requirements sections"
+                                 ".  Note that pip requirements as used in conda-env "
+                                 "environment.yml files are not supported by conda-build.")
 
     def parse_until_resolved(self, config, variant=None):
         """variant contains key-value mapping for additional functions and values
@@ -705,13 +715,20 @@ class MetaData(object):
 
     def _get_hash_dictionary(self):
         sections = ['source', 'requirements', 'build']
-        composite = HashableDict({section: self.get_section(section) for section in sections})
+        # make a copy of values, so that no sorting occurs in place
+        composite = HashableDict({section: copy.deepcopy(self.get_section(section))
+                                  for section in sections})
         # remove the build number from the hash, so that we can bump it without changing the hash
         if 'number' in composite['build']:
             del composite['build']['number']
         # remove the build string, so that hashes don't affect themselves
         if 'string' in composite['build']:
             del composite['build']['string']
+        if not composite['build']:
+            del composite['build']
+        for key in 'build', 'run':
+            if key in composite['requirements'] and not composite['requirements'].get(key):
+                del composite['requirements'][key]
         return composite
 
     def _hash_dependencies(self):

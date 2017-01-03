@@ -229,13 +229,6 @@ class Config(object):
             res = join(prefix, 'bin/{}'.format(binary_name))
         return res
 
-    @property
-    def build_id(self):
-        """This is a per-build (almost) unique id, consisting of the package being built, and the
-        time since the epoch, in ms.  It is appended to build and test prefixes, and used to create
-        unique work folders for build and test."""
-        return self._build_id
-
     def compute_build_id(self, package_name, reset=False):
         if not self._build_id or reset:
             assert not os.path.isabs(package_name), ("package name should not be a absolute path, "
@@ -252,6 +245,13 @@ class Config(object):
                 build_id = package_name + "_" + str(int(time.time() * 1000))
                 # important: this is recomputing prefixes and determines where work folders are.
                 self._build_id = build_id
+
+    @property
+    def build_id(self):
+        """This is a per-build (almost) unique id, consisting of the package being built, and the
+        time since the epoch, in ms.  It is appended to build and test prefixes, and used to create
+        unique work folders for build and test."""
+        return self._build_id
 
     @build_id.setter
     def build_id(self, _build_id):

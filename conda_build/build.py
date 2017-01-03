@@ -961,12 +961,13 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
                 source.provide(m, config)
             reparse(m, config=config)
             if m.uses_jinja:
-                print("BUILD START (revised):", m.dist())
+                print("BUILD START (revised):", finalize_metadata(m).dist())
 
         elif need_reparse_in_env:
             reparse(m, config=config)
-            print("BUILD START (revised):", m.dist())
+            print("BUILD START (revised):", finalize_metadata(m).dist())
 
+        final_metadata = finalize_metadata(m, config)
         print("Package:", finalize_metadata(m).dist())
 
         # get_dir here might be just work, or it might be one level deeper,
