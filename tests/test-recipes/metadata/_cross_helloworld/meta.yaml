@@ -14,7 +14,8 @@ requirements:
 
 build:
   script:
-    - gcc helloworld.c -L${PREFIX}/lib -lgreeting -DGREETING_SUFFIX=$(xz --version | head -n 1) -o ${PREFIX}/bin/helloworld
+    - env
+    - arm-unknown-linux-uclibcgnueabi-gcc helloworld.c -I${PREFIX}/include -L${PREFIX}/lib -lgreeting -DGREETING_SUFFIX="$(xz --version | head -n 1)" -o ${PREFIX}/bin/helloworld
 
 tests:
   - strings ${PREFIX}/bin/helloworld | grep "XZ Utils"

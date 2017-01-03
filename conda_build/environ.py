@@ -49,7 +49,7 @@ def get_npy_ver(config):
 
 
 def get_lua_include_dir(config):
-    return join(config.build_prefix, "include")
+    return join(config.host_prefix, "include")
 
 
 def verify_git_repo(git_dir, git_url, config, expected_rev='HEAD'):
@@ -243,9 +243,9 @@ def conda_build_vars(prefix, config):
         'PYTHONNOUSERSITE': '1',
         'CONDA_DEFAULT_ENV': config.build_prefix,
         'ARCH': str(config.arch),
-        'PREFIX': prefix,
+        'BUILD_PREFIX': prefix,
         'SYS_PREFIX': sys.prefix,
-        'HOST_PREFIX': config.host_prefix,
+        'PREFIX': config.host_prefix,
         'SYS_PYTHON': sys.executable,
         'SUBDIR': config.subdir,
         'SRC_DIR': config.work_dir,

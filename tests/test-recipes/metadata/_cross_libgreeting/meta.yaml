@@ -11,7 +11,9 @@ requirements:
 
 build:
   script:
-    - env
-    - gcc -o ${LDFLAGS} ${CFLAGS} libgreeting.o libgreeting.c
-    - ar cru ${PREFIX}/lib/libgreeting.a libgreeting.o
+    - env | sort
+    - mkdir -p ${PREFIX}/lib || true
+    - mkdir -p ${PREFIX}/include || true
+    - arm-unknown-linux-uclibcgnueabi-gcc -c ${LDFLAGS} ${CFLAGS} -o libgreeting.o libgreeting.c
+    - arm-unknown-linux-uclibcgnueabi-ar cru ${PREFIX}/lib/libgreeting.a libgreeting.o
     - cp libgreeting.h ${PREFIX}/include

@@ -98,7 +98,8 @@ def create_post_scripts(m, config):
         src = join(recipe_dir, tp + ext)
         if not isfile(src):
             continue
-        dst_dir = join(config.build_prefix,
+        # TODOCROSS :: utils.on_win here needs to check if the host is Windows instead.
+        dst_dir = join(config.host_prefix,
                        'Scripts' if utils.on_win else 'bin')
         if not isdir(dst_dir):
             os.makedirs(dst_dir, 0o775)
@@ -185,17 +186,21 @@ def get_run_dists(m, config):
     return sorted(linked(prefix))
 
 
+def get_deps(m, machine, prefix):
+    # we only care if we actually have deps.  Otherwise, the environment will not be
+    #    valid for inspection.
+    if m.meta.get('requirements') and m.meta['requirements'].get(machine):
+        return environ.Environment(prefix).package_specs()
+    return []
+
 def finalize_metadata(m, config=None):
     """Fully render a recipe.  Fill in versions for build dependencies."""
     if not config:
         config = m.config
     rendered_metadata = copy.deepcopy(m)
     # fill in build versions used
-    build_deps = []
-    # we only care if we actually have build deps.  Otherwise, the environment will not be
-    #    valid for inspection.
-    if m.meta.get('requirements') and m.meta['requirements'].get('build'):
-        build_deps = environ.Environment(m.config.build_prefix).package_specs()
+    build_deps = get_deps(m, 'build', m.config.build_prefix)
+    host_deps = get_deps(m, 'host', m.config.host_prefix)
 
     if not rendered_metadata.meta.get('build'):
         rendered_metadata.meta['build'] = {}
@@ -204,6 +209,7 @@ def finalize_metadata(m, config=None):
 
     rendered_metadata.meta['requirements'] = rendered_metadata.meta.get('requirements', {})
     rendered_metadata.meta['requirements']['build'] = build_deps
+    rendered_metadata.meta['requirements']['host'] = host_deps
 
     # if source/path is relative, then the output package makes no sense at all.  The next
     #   best thing is to hard-code the absolute path.  This probably won't exist on any
@@ -520,7 +526,7 @@ def create_info_files(m, files, config, prefix):
         utils.copy_into(join(m.path, m.get_value('app/icon')),
                         join(config.info_dir, 'icon.png'),
                         config.timeout, locking=config.locking)
-    return [f.replace(config.build_prefix + '/', '') for root, _, _ in os.walk(config.info_dir)
+    return [f.replace(config.host_prefix + '/', '') for root, _, _ in os.walk(config.info_dir)
             for f in glob(os.path.join(root, '*'))]
 
 
@@ -640,23 +646,23 @@ def bundle_conda(output, metadata, config, env, **kw):
         interpreter = output.get('script_interpreter')
         if not interpreter:
             interpreter = guess_interpreter(output['script'])
-        initial_files_snapshot = prefix_files(config.build_prefix)
+        initial_files_snapshot = prefix_files(config.host_prefix)
         utils._check_call(interpreter.split(' ') +
                     [os.path.join(metadata.path, output['script'])],
-                    cwd=config.build_prefix, env=env)
-        files = prefix_files(config.build_prefix) - initial_files_snapshot
+                    cwd=config.host_prefix, env=env)
+        files = prefix_files(config.host_prefix) - initial_files_snapshot
     tmp_metadata = copy.deepcopy(metadata)
     tmp_metadata.meta['package']['name'] = output['name']
     tmp_metadata.meta['requirements'] = {'run': output.get('requirements', [])}
 
     output_filename = ('-'.join([output['name'], metadata.version(),
                                  tmp_metadata.build_id()]) + '.tar.bz2')
-    files = list(set(utils.expand_globs(files, config.build_prefix)))
-    info_files = create_info_files(tmp_metadata, files, config=config, prefix=config.build_prefix)
+    files = list(set(utils.expand_globs(files, config.host_prefix)))
+    info_files = create_info_files(tmp_metadata, files, config=config, prefix=config.host_prefix)
     for f in info_files:
         if f not in files:
             files.append(f)
-    files = filter_files(files, prefix=config.build_prefix)
+    files = filter_files(files, prefix=config.host_prefix)
     output_folder = None
     if config.output_folder:
         output_folder = os.path.join(config.output_folder, config.subdir)
@@ -670,7 +676,7 @@ def bundle_conda(output, metadata, config, env, **kw):
 
         def order(f):
             # we don't care about empty files so send them back via 100000
-            fsize = os.stat(join(config.build_prefix, f)).st_size or 100000
+            fsize = os.stat(join(config.host_prefix, f)).st_size or 100000
             # info/* records will be False == 0, others will be 1.
             info_order = int(os.path.dirname(f) != 'info')
             return info_order, fsize
@@ -679,7 +685,7 @@ def bundle_conda(output, metadata, config, env, **kw):
         # we can access small manifest or json files without decompressing
         # possible large binary or data files
         for f in sorted(files, key=order):
-            t.add(join(config.build_prefix, f), f)
+            t.add(join(config.host_prefix, f), f)
         t.close()
 
         # we're done building, perform some checks
@@ -783,6 +789,10 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
                                     " does not yet support Python 3.  Please handle all of "
                                     "your mercurial actions outside of your build script.")
 
+        if 'host' in m.meta.get('requirements', {}):
+            specs = [ms.spec for ms in m.ms_depends('host')]
+            environ.create_env(config.host_prefix, specs, config=config)
+
         if need_source_download:
             # Execute any commands fetching the source (e.g., git) in the _build environment.
             # This makes it possible to provide source fetchers (eg. git, hg, svn) as build
@@ -797,10 +807,6 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             reparse(m, config=config)
             print("BUILD START (revised):", finalize_metadata(m).dist())
 
-        if 'host' in m.meta.get('requirements', {}):
-            specs = [ms.spec for ms in m.ms_depends('host')]
-            environ.create_env(config.host_prefix, specs, config=config)
-
         final_metadata = finalize_metadata(m, config)
         print("Package:", finalize_metadata(m).dist())
 
@@ -814,7 +820,7 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
             os.makedirs(src_dir)
 
         utils.rm_rf(config.info_dir)
-        files1 = prefix_files(prefix=config.build_prefix)
+        files1 = prefix_files(prefix=config.host_prefix)
         for pat in m.always_include_files():
             has_matches = False
             for f in set(files1):
@@ -887,25 +893,25 @@ def build(m, config, post=None, need_source_download=True, need_reparse_in_env=F
 
         if not is_noarch_python(m):
             utils.create_entry_points(m.get_value('build/entry_points'), config=config)
-        files2 = prefix_files(prefix=config.build_prefix)
+        files2 = prefix_files(prefix=config.host_prefix)
 
         post_process(sorted(files2 - files1),
-                     prefix=config.build_prefix,
+                     prefix=config.host_prefix,
                      config=config,
                      preserve_egg_dir=bool(m.get_value('build/preserve_egg_dir')),
                      noarch=m.get_value('build/noarch'),
                      skip_compile_pyc=m.get_value('build/skip_compile_pyc'))
 
         # The post processing may have deleted some files (like easy-install.pth)
-        files2 = prefix_files(prefix=config.build_prefix)
-        if any(config.meta_dir in join(config.build_prefix, f) for f in files2 - files1):
+        files2 = prefix_files(prefix=config.host_prefix)
+        if any(config.meta_dir in join(config.host_prefix, f) for f in files2 - files1):
             meta_files = (tuple(f for f in files2 - files1 if config.meta_dir in
-                    join(config.build_prefix, f)),)
+                    join(config.host_prefix, f)),)
             sys.exit(indent("""Error: Untracked file(s) %s found in conda-meta directory.
 This error usually comes from using conda in the build script.  Avoid doing this, as it
 can lead to packages that include their dependencies.""" % meta_files))
         post_build(m, sorted(files2 - files1),
-                    prefix=config.build_prefix,
+                    prefix=config.host_prefix,
                     build_python=config.build_python,
                     croot=config.croot)
 
@@ -917,14 +923,14 @@ can lead to packages that include their dependencies.""" % meta_files))
 
         # the legacy noarch
         if m.get_value('build/noarch_python'):
-            noarch_python.transform(m, sorted(files2 - files1), config.build_prefix)
+            noarch_python.transform(m, sorted(files2 - files1), config.host_prefix)
         # new way: build/noarch: python
         elif is_noarch_python(m):
             noarch_python.populate_files(
-                m, pkg_files, config.build_prefix, entry_point_script_names)
+                m, pkg_files, config.host_prefix, entry_point_script_names)
 
-        files3 = prefix_files(prefix=config.build_prefix)
-        fix_permissions(files3 - files1, config.build_prefix)
+        files3 = prefix_files(prefix=config.host_prefix)
+        fix_permissions(files3 - files1, config.host_prefix)
 
         outputs = m.get_section('outputs')
         # this is the old, default behavior: conda package, with difference between start

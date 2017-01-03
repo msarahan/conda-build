@@ -269,40 +269,40 @@ class Config(object):
         self._prefix_length = length
 
     @property
-    def _short_build_prefix(self):
-        return join(self.build_folder, '_b_env')
+    def _short_host_prefix(self):
+        return join(self.build_folder, '_h_env')
 
     @property
-    def _long_build_prefix(self):
-        placeholder_length = self.prefix_length - len(self._short_build_prefix)
+    def _long_host_prefix(self):
+        placeholder_length = self.prefix_length - len(self._short_host_prefix)
         placeholder = '_placehold'
         repeats = int(math.ceil(placeholder_length / len(placeholder)) + 1)
-        placeholder = (self._short_build_prefix + repeats * placeholder)[:self.prefix_length]
-        return max(self._short_build_prefix, placeholder)
+        placeholder = (self._short_host_prefix + repeats * placeholder)[:self.prefix_length]
+        return max(self._short_host_prefix, placeholder)
 
     @property
-    def build_prefix(self):
+    def host_prefix(self):
         """The temporary folder where the build environment is created.  The build env contains
         libraries that may be linked, but only if the host env is not specified.  It is placed on
         PATH."""
         if on_win:
-            return self._short_build_prefix
-        return self._long_build_prefix
+            return self._short_host_prefix
+        return self._long_host_prefix
 
     @property
-    def host_prefix(self):
+    def build_prefix(self):
         """The temporary folder where the host environment is created.  The host env contains
         libraries that may be linked.  It is not placed on PATH."""
-        return join(self.build_folder, '_host_env')
+        return join(self.build_folder, '_build_env')
 
     @property
     def test_prefix(self):
         """The temporary folder where the test environment is created"""
-        return join(self.build_folder, '_t_env')
+        return join(self.build_folder, '_test_env')
 
     @property
     def build_python(self):
-        return self._get_python(self.build_prefix)
+        return self._get_python(self.host_prefix)
 
     @property
     def test_python(self):
@@ -310,7 +310,7 @@ class Config(object):
 
     @property
     def build_perl(self):
-        return self._get_perl(self.build_prefix)
+        return self._get_perl(self.host_prefix)
 
     @property
     def test_perl(self):
@@ -318,7 +318,7 @@ class Config(object):
 
     @property
     def build_lua(self):
-        return self._get_lua(self.build_prefix)
+        return self._get_lua(self.host_prefix)
 
     @property
     def test_lua(self):
@@ -326,13 +326,13 @@ class Config(object):
 
     @property
     def info_dir(self):
-        path = join(self.build_prefix, 'info')
+        path = join(self.host_prefix, 'info')
         _ensure_dir(path)
         return path
 
     @property
     def meta_dir(self):
-        path = join(self.build_prefix, 'conda-meta')
+        path = join(self.host_prefix, 'conda-meta')
         _ensure_dir(path)
         return path
 
