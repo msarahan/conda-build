@@ -372,3 +372,16 @@ def context_processor(initial_metadata, recipe_dir, config, permit_undefined_jin
         variant=variant,
         environ=environ)
     return ctx
+
+
+def get_used_variants(recipe_metadata):
+    """because the functions in jinja_context don't directly used jinja variables, we need to teach
+    conda-build which ones are used, so that it can limit the build space based on what entries are
+    actually used."""
+    with open(recipe_metadata.meta_path) as f:
+        recipe_text = f.read()
+    used_variables = set()
+    for lang in 'c', 'cxx', 'fortran':
+        if re.search('compiler\([\\]?[\'"]{}[\\]?[\'"]\)'.format(lang), recipe_text):
+            used_variables.update(set(['{}_compiler'.format(lang), 'target_platform']))
+    return used_variables

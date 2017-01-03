@@ -10,6 +10,7 @@ import yaml
 
 from conda_build.utils import ensure_list
 from conda_build.conda_interface import cc
+from conda_build import jinja_context
 
 
 DEFAULT_VARIANTS = {
@@ -70,8 +71,10 @@ def get_package_variants(recipe_metadata, config_files=None, ignore_system_confi
     if not specs:
         specs = [DEFAULT_VARIANTS]
     combined_spec = combine_specs(specs)
-    matching_subset = set(recipe_metadata.undefined_jinja_vars) & set(combined_spec.keys())
-    matching_subset = {key: combined_spec[key] for key in matching_subset}
+    matching_subset = (set(recipe_metadata.undefined_jinja_vars) |
+                       jinja_context.get_used_variants(recipe_metadata)) & \
+    set(combined_spec.keys())
+    matching_subset = {key: ensure_list(combined_spec[key]) for key in matching_subset}
 
     # http://stackoverflow.com/a/5228294/1170370
     # end result is a collection of dicts, like [{'CONDA_PY': 2.7, 'CONDA_NPY': 1.11},

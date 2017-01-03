@@ -783,4 +783,4 @@ def test_cross_compiler(testing_workdir, test_config):
     # TODO: testing purposes.  Package on @mingwandroid's channel.
     test_config.channel_urls = ('rdonnelly', )
     recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
-    api.build(recipe_dir)
+    api.build(recipe_dir, config=test_config)
