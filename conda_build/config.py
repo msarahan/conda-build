@@ -281,19 +281,19 @@ class Config(object):
         return max(self._short_host_prefix, placeholder)
 
     @property
-    def host_prefix(self):
+    def build_prefix(self):
         """The temporary folder where the build environment is created.  The build env contains
         libraries that may be linked, but only if the host env is not specified.  It is placed on
         PATH."""
+        return join(self.build_folder, '_build_env')
+
+    @property
+    def host_prefix(self):
+        """The temporary folder where the host environment is created.  The host env contains
+        libraries that may be linked.  It is not placed on PATH."""
         if on_win:
             return self._short_host_prefix
         return self._long_host_prefix
-
-    @property
-    def build_prefix(self):
-        """The temporary folder where the host environment is created.  The host env contains
-        libraries that may be linked.  It is not placed on PATH."""
-        return join(self.build_folder, '_build_env')
 
     @property
     def test_prefix(self):
@@ -302,6 +302,10 @@ class Config(object):
 
     @property
     def build_python(self):
+        return self._get_python(self.build_prefix)
+
+    @property
+    def host_python(self):
         return self._get_python(self.host_prefix)
 
     @property

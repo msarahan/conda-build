@@ -85,7 +85,7 @@ def parse_or_try_download(metadata, no_download_source, config,
         try:
             if not config.dirty:
                 if len(os.listdir(config.work_dir)) == 0:
-                    source.provide(metadata, config=config)
+                    source.provide(metadata)
                 need_source_download = False
             try:
                 metadata.parse_again(permit_undefined_jinja=False)
@@ -106,6 +106,8 @@ def parse_or_try_download(metadata, no_download_source, config,
                                     config.ignore_system_variants)
     for variant in variants:
         metadata = copy.deepcopy(metadata)
+        if 'target_platform' in variant:
+            metadata.config.subdir = variant['target_platform']
         try:
             metadata.parse_until_resolved(config=config, variant=variant)
             need_reparse_in_env = False
@@ -115,12 +117,12 @@ def parse_or_try_download(metadata, no_download_source, config,
     return output
 
 
-def reparse(metadata, config):
+def reparse(metadata):
     """Some things need to be parsed again after the build environment has been created
     and activated."""
-    sys.path.insert(0, config.build_prefix)
-    sys.path.insert(0, utils.get_site_packages(config.build_prefix))
-    metadata.parse_again(config=config, permit_undefined_jinja=False)
+    sys.path.insert(0, metadata.config.build_prefix)
+    sys.path.insert(0, utils.get_site_packages(metadata.config.build_prefix))
+    metadata.parse_again(permit_undefined_jinja=False)
 
 
 def render_recipe(recipe_path, config, no_download_source=False):
@@ -172,7 +174,7 @@ def render_recipe(recipe_path, config, no_download_source=False):
             log.warn("Need to create build environment to fully render this recipe.  Doing so.")
             specs = [ms.spec for ms in entry[0].ms_depends('build')]
             environ.create_env(config.build_prefix, specs, config=config)
-        reparse(entry[0], config)
+        reparse(entry[0])
 
     config.noarch = bool(m.get_value('build/noarch'))
 

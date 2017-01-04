@@ -760,7 +760,9 @@ class LoggingContext(object):
 def get_build_index(config, clear_cache=True):
     # priority: local by croot (can vary), then channels passed as args,
     #     then channels from config.
-    urls = [url_path(config.croot)] + list(config.channel_urls)
+    urls = list(config.channel_urls)
+    if os.path.isdir(config.croot):
+        urls.insert(0, url_path(config.croot))
     index = get_index(channel_urls=urls,
                       prepend=not config.override_channels,
                       use_local=False,

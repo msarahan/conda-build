@@ -455,14 +455,14 @@ class MetaData(object):
         # (e.g. GIT_FULL_HASH, etc. are undefined)
         # Therefore, undefined jinja variables are permitted here
         # In the second pass, we'll be more strict. See build.build()
-        self.parse_again(config=config, permit_undefined_jinja=True, variant=variant)
+        self.parse_again(permit_undefined_jinja=True, variant=variant)
         self.config.disable_pip = self.disable_pip
 
     @property
     def disable_pip(self):
         return 'build' in self.meta and 'disable_pip' in self.meta['build']
 
-    def _append_metadata_sections(self, sections_file_or_dict, merge, config):
+    def _append_metadata_sections(self, sections_file_or_dict, merge):
         """Append to or replace subsections to meta.yaml
 
         This is used to alter input recipes, so that a given requirement or
@@ -474,10 +474,10 @@ class MetaData(object):
             build_config = sections_file_or_dict
         else:
             with open(sections_file_or_dict) as configfile:
-                build_config = parse(configfile.read(), config=config)
+                build_config = parse(configfile.read(), config=self.config)
         _merge_or_update_values(self.meta, build_config, merge=merge)
 
-    def parse_again(self, config=None, permit_undefined_jinja=False, variant=None):
+    def parse_again(self, permit_undefined_jinja=False, variant=None):
         """Redo parsing for key-value pairs that are not initialized in the
         first pass.
 
@@ -497,18 +497,16 @@ class MetaData(object):
         if variant:
             self.variant = variant
 
-        if not config:
-            config = self.config
-
         os.environ["CONDA_BUILD_STATE"] = "RENDER"
         append_sections_file = None
         clobber_sections_file = None
         try:
             # we sometimes create metadata from dictionaries, in which case we'll have no path
             if self.meta_path:
-                self.meta = parse(self._get_contents(permit_undefined_jinja, config=config,
+                self.meta = parse(self._get_contents(permit_undefined_jinja,
                                                         variant=self.variant),
-                                    config=config, path=self.meta_path)
+                                  config=self.config,
+                                  path=self.meta_path)
 
                 if (isfile(self.requirements_path) and
                         not self.meta['requirements']['run']):
@@ -529,14 +527,12 @@ class MetaData(object):
                 clobber_sections_file = None
 
             if append_sections_file:
-                self._append_metadata_sections(append_sections_file, merge=True,
-                                                config=config)
+                self._append_metadata_sections(append_sections_file, merge=True)
             if clobber_sections_file:
-                self._append_metadata_sections(clobber_sections_file, merge=False,
-                                                config=config)
+                self._append_metadata_sections(clobber_sections_file, merge=False)
             if self.config.bootstrap:
                 dependencies = _get_dependencies_from_environment(self.config.bootstrap)
-                self._append_metadata_sections(dependencies, merge=True, config=config)
+                self._append_metadata_sections(dependencies, merge=True)
         except:
             raise
         finally:
@@ -558,26 +554,26 @@ class MetaData(object):
         # undefined_jinja_vars is refreshed by self.parse again
         undefined_jinja_vars = ()
         # always parse again at least once.
-        self.parse_again(config, permit_undefined_jinja=True, variant=variant)
+        self.parse_again(permit_undefined_jinja=True, variant=variant)
 
         while set(undefined_jinja_vars) != set(self.undefined_jinja_vars):
             undefined_jinja_vars = self.undefined_jinja_vars
-            self.parse_again(config, permit_undefined_jinja=True, variant=variant)
+            self.parse_again(permit_undefined_jinja=True, variant=variant)
         if undefined_jinja_vars:
             sys.exit("Undefined Jinja2 variables remain ({}).  Please enable "
                      "source downloading and try again.".format(self.undefined_jinja_vars))
 
         # always parse again at the end, too.
-        self.parse_again(config, permit_undefined_jinja=False, variant=variant)
+        self.parse_again(permit_undefined_jinja=False, variant=variant)
 
     @classmethod
     def fromstring(cls, metadata, config=None):
         m = super(MetaData, cls).__new__(cls)
         if not config:
             config = Config()
-        m.meta = parse(metadata, path='', config=config)
+        m.meta = parse(metadata, config=config, path='')
         m.config = config
-        m.parse_again(config=config, permit_undefined_jinja=True)
+        m.parse_again(permit_undefined_jinja=True)
         return m
 
     @classmethod
@@ -873,7 +869,7 @@ class MetaData(object):
     def skip(self):
         return self.get_value('build/skip', False)
 
-    def _get_contents(self, permit_undefined_jinja, config, variant=None):
+    def _get_contents(self, permit_undefined_jinja, variant=None):
         '''
         Get the contents of our [meta.yaml|conda.yaml] file.
         If jinja is installed, then the template.render function is called
@@ -914,13 +910,13 @@ class MetaData(object):
             UndefinedNeverFail.all_undefined_names = []
             undefined_type = UndefinedNeverFail
 
-        loader = FilteredLoader(jinja2.ChoiceLoader(loaders), config=config)
+        loader = FilteredLoader(jinja2.ChoiceLoader(loaders), config=self.config)
         env = jinja2.Environment(loader=loader, undefined=undefined_type)
 
-        env.globals.update(ns_cfg(config))
+        env.globals.update(ns_cfg(self.config))
         if variant:
             env.globals.update(variant)
-        env.globals.update(context_processor(self, path, config=config,
+        env.globals.update(context_processor(self, path, config=self.config,
                                              permit_undefined_jinja=permit_undefined_jinja,
                                              variant=variant))
 
