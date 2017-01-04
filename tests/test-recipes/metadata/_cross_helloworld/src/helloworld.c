@@ -1,7 +1,8 @@
 #include <libgreeting.h>
 #include <stdio.h>
 
-#define STRINGIZE(_x) #_x
+#define STRINGIZE2(_x) #_x
+#define STRINGIZE(_x) STRINGIZE2(_x)
 
 int main(int argc, char * argv[])
 {
