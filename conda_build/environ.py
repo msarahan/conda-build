@@ -243,9 +243,19 @@ def conda_build_vars(prefix, config):
         'PYTHONNOUSERSITE': '1',
         'CONDA_DEFAULT_ENV': config.build_prefix,
         'ARCH': str(config.arch),
-        'BUILD_PREFIX': prefix,
+        # This is the one that is most important for where people put artifacts that get bundled.
+        #     It is fed from our function argument, and can be any of:
+        #     1. Build prefix - when host requirements are not explicitly set,
+        #        then prefix = build prefix = host prefix
+        #     2. Host prefix - when host requirements are explicitly set, prefix = host prefix
+        #     3. Test prefix - during test runs, this points at the test prefix
+        'PREFIX': prefix,
+        # This is for things that are specifically build tools.  Things that run on the build
+        #    platform, but probably should not be linked against, since they may not run on the
+        #    destination host platform
+        # It can be equivalent to config.host_prefix if the host section is not explicitly set.
+        'BUILD_PREFIX': config.build_prefix,
         'SYS_PREFIX': sys.prefix,
-        'PREFIX': config.host_prefix,
         'SYS_PYTHON': sys.executable,
         'SUBDIR': config.subdir,
         'SRC_DIR': config.work_dir,

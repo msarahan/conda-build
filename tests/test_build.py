@@ -81,7 +81,7 @@ def test_write_about_json_without_conda_on_path(testing_workdir, test_metadata):
         # verify that the correct (bad) conda is the one we call
         with pytest.raises(subprocess.CalledProcessError):
             subprocess.check_output('conda -h', env=os.environ, shell=True)
-        build.write_about_json(test_metadata, test_metadata.config)
+        build.write_about_json(test_metadata)
 
     output_file = os.path.join(test_metadata.config.info_dir, 'about.json')
     assert os.path.isfile(output_file)

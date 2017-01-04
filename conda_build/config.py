@@ -112,6 +112,7 @@ class Config(object):
                   Setting('_prefix_length', DEFAULT_PREFIX_LENGTH),
                   Setting('locking', True),
                   Setting('max_env_retry', 3),
+                  Setting('has_separate_host_prefix', False),
 
                   # variants
                   Setting('variant_config_files', []),
@@ -285,7 +286,11 @@ class Config(object):
         """The temporary folder where the build environment is created.  The build env contains
         libraries that may be linked, but only if the host env is not specified.  It is placed on
         PATH."""
-        return join(self.build_folder, '_build_env')
+        if self.has_separate_host_prefix:
+            prefix = join(self.build_folder, '_build_env')
+        else:
+            prefix = self.host_prefix
+        return prefix
 
     @property
     def host_prefix(self):

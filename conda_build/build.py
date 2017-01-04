@@ -903,7 +903,7 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
         files2 = prefix_files(prefix=m.config.host_prefix)
         if any(m.config.meta_dir in join(m.config.host_prefix, f) for f in files2 - files1):
             meta_files = (tuple(f for f in files2 - files1 if m.config.meta_dir in
-                    join(config.host_prefix, f)),)
+                    join(m.config.host_prefix, f)),)
             sys.exit(indent("""Error: Untracked file(s) %s found in conda-meta directory.
 This error usually comes from using conda in the build script.  Avoid doing this, as it
 can lead to packages that include their dependencies.""" % meta_files))

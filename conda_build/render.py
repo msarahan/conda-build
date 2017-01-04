@@ -101,6 +101,9 @@ def parse_or_try_download(metadata, no_download_source, config,
     elif not metadata.get_section('source'):
         need_source_download = False
 
+    if 'host' in metadata.get_section('requirements'):
+        metadata.config.has_separate_host_prefix = True
+
     output = []
     variants = get_package_variants(metadata, config.variant_config_files,
                                     config.ignore_system_variants)
