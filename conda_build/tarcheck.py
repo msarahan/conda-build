@@ -2,9 +2,11 @@ from __future__ import absolute_import, division, print_function
 
 import json
 from os.path import basename
+import re
 import tarfile
 
 from conda_build.utils import codec
+from conda_build.metadata import HASH_LENGTH
 from conda_build.conda_interface import subdir
 
 
@@ -31,7 +33,7 @@ class TarCheck(object):
         self.t.close()
 
     def info_files(self):
-        if 'py_' in self.build:
+        if re.search('pyh[0-9]{%d}_' % HASH_LENGTH, self.build):
             return
         lista = [p.strip().decode('utf-8') for p in
                  self.t.extractfile('info/files').readlines()]
