@@ -28,6 +28,7 @@ from enum import Enum
 
 import os
 
+
 if parse_version(conda.__version__) >= parse_version("4.2"):
     # conda 4.2.x
     import conda.base.context
@@ -58,6 +59,7 @@ if parse_version(conda.__version__) >= parse_version("4.2"):
     NoPackagesFoundError = conda.exceptions.NoPackagesFoundError
     CondaValueError = conda.exceptions.CondaValueError
     LockError = conda.exceptions.LockError
+    reset_context = conda.base.context.reset_context
 
     # disallow softlinks.  This avoids a lot of dumb issues, at the potential cost of disk space.
     conda.base.context.context.allow_softlinks = False
@@ -81,6 +83,7 @@ else:
     root_dir = cc.root_dir
     root_writable = cc.root_writable
     subdir = cc.subdir
+    reset_context = lambda x: None
 
     get_rc_urls = cc.get_rc_urls
     get_local_urls = cc.get_local_urls

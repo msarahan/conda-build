@@ -429,9 +429,11 @@ class MetaData(object):
         self.undefined_jinja_vars = []
 
         if not config:
-            config = Config()
-
-        self.config = config
+            self.config = Config()
+        else:
+            # decouple this config from whatever was fed in.  People must change config by
+            #    accessing and changing this attribute.
+            self.config = copy.deepcopy(config)
 
         if isfile(path):
             self.meta_path = path
@@ -786,8 +788,8 @@ class MetaData(object):
             version=self.version(),
             build=self.build_id(),
             build_number=self.build_number() if self.build_number() else 0,
-            platform=platform,
-            arch=arch_name,
+            platform=self.config.platform,
+            arch=self.config.arch,
             subdir=self.config.subdir,
             depends=sorted(' '.join(ms.spec.split())
                              for ms in self.ms_depends()),

@@ -263,8 +263,9 @@ def inspect_objects(packages, prefix=_sys.prefix, groupby='filename'):
 
 def inspect_prefix_length(packages, min_prefix_length=_prefix_length):
     from conda_build.tarcheck import check_prefix_lengths
+    config = Config(prefix_length=min_prefix_length)
     packages = _ensure_list(packages)
-    prefix_lengths = check_prefix_lengths(packages, min_prefix_length)
+    prefix_lengths = check_prefix_lengths(packages, config)
     if prefix_lengths:
         print("Packages with binary prefixes shorter than %d characters:"
                 % min_prefix_length)

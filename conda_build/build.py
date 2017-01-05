@@ -39,7 +39,6 @@ from .conda_interface import prefix_placeholder, linked, symlink_conda
 from .conda_interface import url_path
 from .conda_interface import Resolve, MatchSpec, Unsatisfiable
 from .conda_interface import TemporaryDirectory
-from .conda_interface import get_rc_urls, get_local_urls
 from .conda_interface import VersionOrder
 from .conda_interface import (PaddingError, LinkError, CondaValueError,
                               NoPackagesFoundError, NoPackagesFound, LockError)
@@ -687,7 +686,7 @@ def bundle_conda(output, metadata, env, **kw):
         t.close()
 
         # we're done building, perform some checks
-        tarcheck.check_all(tmp_path)
+        tarcheck.check_all(tmp_path, metadata.config)
         if not getattr(metadata.config, "noverify", False):
             verifier = Verify()
             ignore_scripts = metadata.config.ignore_package_verify_scripts if \
@@ -763,7 +762,7 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
         specs = [ms.spec for ms in m.ms_depends('build')]
         if any(out.get('type') == 'wheel' for out in m.meta.get('outputs', [])):
             specs.extend(['pip', 'wheel'])
-        environ.create_env(m.config.build_prefix, specs, config=m.config)
+
         vcs_source = m.uses_vcs_in_build
         if vcs_source and vcs_source not in specs:
             vcs_executable = "hg" if vcs_source == "mercurial" else vcs_source
@@ -778,14 +777,12 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
                     log.warn("Your recipe depends on %s at build time (for templates), "
                             "but you have not listed it as a build dependency.  Doing "
                                 "so for this build.", vcs_source)
-
-                    # Display the name only
-                    # Version number could be missing due to dependency on source info.
-                    environ.create_env(m.config.build_prefix, specs, config=m.config)
                 else:
                     raise ValueError("Your recipe uses mercurial in build, but mercurial"
                                     " does not yet support Python 3.  Please handle all of "
                                     "your mercurial actions outside of your build script.")
+
+        environ.create_env(m.config.build_prefix, specs, config=m.config)
 
         if 'host' in m.meta.get('requirements', {}):
             specs = [ms.spec for ms in m.ms_depends('host')]
@@ -1300,7 +1297,7 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                             built_packages.append(pkg)
                     else:
                         built_packages.extend(packages_from_this)
-        except (NoPackagesFound, NoPackagesFoundError, Unsatisfiable, CondaValueError) as e:
+        except (NoPackagesFound, NoPackagesFoundError, Unsatisfiable, CondaValueError, RuntimeError) as e:
             error_str = str(e)
             skip_names = ['python', 'r']
             add_recipes = []
@@ -1335,6 +1332,8 @@ packages, the other package needs to be rebuilt
                     raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n"
                                        .format(recipe) + error_str + "\n\n" + extra_help)
             recipe_list.extendleft(add_recipes)
+        except SystemExit:
+            raise
 
         # outputs message, or does upload, depending on value of args.anaconda_upload
         if post in [True, None]:
@@ -1446,15 +1445,20 @@ def is_package_built(metadata):
         if not os.path.isdir(d):
             os.makedirs(d)
         update_index(d, config, could_be_mirror=False)
-    index = utils.get_build_index(config=metadata.config, clear_cache=True)
 
-    urls = [url_path(config.croot)] + get_rc_urls() + get_local_urls() + ['local', ]
-    if config.channel_urls:
-        urls.extend(config.channel_urls)
-
-    # will be empty if none found, and evalute to False
-    package_exists = [url for url in urls if url + '::' + metadata.pkg_fn() in index]
-    return package_exists or metadata.pkg_fn() in index
+    with env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(config))):
+        try:
+            utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
+            built = True
+        except SystemExit:
+            # retry, omitting defaults
+            with env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(config, is_host=True))):
+                try:
+                    utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
+                    built = True
+                except SystemExit:
+                    built = False
+    return built
 
 
 def is_noarch_python(meta):

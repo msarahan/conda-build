@@ -1,6 +1,7 @@
 from __future__ import absolute_import, division, print_function
 
 import contextlib
+from functools import partial
 from glob import glob
 import json
 import logging
@@ -18,6 +19,7 @@ from .conda_interface import root_dir, cc, plan, symlink_conda, linked
 from .conda_interface import (PaddingError, LinkError, LockError, NoPackagesFound,
                               NoPackagesFoundError)
 from .conda_interface import Resolve, MatchSpec, VersionOrder
+from .conda_interface import reset_context
 
 from conda_build.os_utils import external
 from conda_build import utils
@@ -214,7 +216,7 @@ def get_hg_build_info(repo):
 
 def get_dict(config, m=None, prefix=None):
     if not prefix:
-        prefix = config.build_prefix
+        prefix = config.host_prefix
 
     # conda-build specific vars
     d = conda_build_vars(prefix, config)
@@ -597,6 +599,18 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         external_logger_context = utils.LoggingContext(logging.CRITICAL)
         capture = utils.capture
 
+    # host or test envs should be using the host subdir, not the native one
+    if config.has_separate_host_prefix and os.path.basename(prefix)[:2] in ("_h", "_t"):
+        # feature added in conda 4.2.14.  Cross-compiling won't work with earlier versions.
+        host_subdir_set = partial(utils.env_var, 'CONDA_SUBDIR',
+                                  config.subdir, callback=reset_context)
+        is_host = True
+    else:
+        host_subdir_set = contextlib.contextmanager(lambda: (yield))
+        is_host = False
+
+    import ipdb; ipdb.set_trace()
+
     with capture():
         with external_logger_context:
             log = logging.getLogger(__name__)
@@ -608,6 +622,7 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
             for feature, value in feature_list:
                 if value:
                     specs.append('%s@' % feature)
+            specs = (spec.replace(' ', '=') for spec in specs)
 
             if specs:  # Don't waste time if there is nothing to do
                 log.debug("Creating environment in %s", prefix)
@@ -628,23 +643,33 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                                 could_be_mirror=False)
                                 locks.append(lock)
                             # lock used to generally indicate a conda operation occurring
-                            locks.append(utils.get_lock('conda-operation', timeout=config.timeout))
+                            locks.append(utils.get_lock('conda-operation',
+                                                        timeout=config.timeout))
 
                         with utils.try_acquire_locks(locks, timeout=config.timeout):
-                            index = utils.get_build_index(config=config, clear_cache=True)
-                            actions = plan.install_actions(prefix, index, specs)
                             if config.disable_pip:
-                                actions['LINK'] = [spec for spec in actions['LINK'] if not spec.startswith('pip-')]  # noqa
-                                actions['LINK'] = [spec for spec in actions['LINK'] if not spec.startswith('setuptools-')]  # noqa
-                            plan.display_actions(actions, index)
-                            if utils.on_win:
-                                for k, v in os.environ.items():
-                                    os.environ[k] = str(v)
-                            plan.execute_actions(actions, index, verbose=config.debug)
-                            warn_on_old_conda_build(index=index)
+                                pip_set = partial(utils.env_var,
+                                                    "CONDA_ADD_PIP_AS_PYTHON_DEPENDENCY",
+                                                    False, callback=reset_context)
+                            else:
+                                pip_set = contextlib.contextmanager(lambda: (yield))
+
+                            with host_subdir_set():
+                                with pip_set():
+                                    with utils.env_var('CONDA_CHANNELS',
+                                                       ','.join(utils.collect_channels(config,
+                                                                                       is_host)),
+                                                       callback=reset_context):
+                                        cmd = 'conda create -yp {prefix} {specs}'.format(
+                                            prefix=prefix, specs=" ".join(specs))
+                                        utils._check_call(cmd.split(' '), env=os.environ)
+
+                                index = utils.get_build_index(config=config, clear_cache=True)
+                                warn_on_old_conda_build(index=index)
                     except (SystemExit, PaddingError, LinkError) as exc:
-                        if (("too short in" in str(exc) or
-                                'post-link failed for: openssl' in str(exc) or
+                        exc_text = str(exc)
+                        if (("too short in" in exc_text or
+                                'post-link failed for: openssl' in exc_text or
                                 isinstance(exc, PaddingError)) and
                                 config.prefix_length > 80):
                             if config.prefix_length_fallback:
@@ -652,41 +677,51 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                         config.prefix_length)
                                 log.warn("Error was: ")
                                 log.warn(str(exc))
-                                log.warn("One or more of your package dependencies needs to be rebuilt "
-                                        "with a longer prefix length.")
-                                log.warn("Falling back to legacy prefix length of 80 characters.")
-                                log.warn("Your package will not install into prefixes > 80 characters.")
+                                log.warn("One or more of your package dependencies needs to be "
+                                        "rebuilt with a longer prefix length.")
+                                log.warn("Falling back to prefix length of 80 characters")
+                                log.warn("Your package will not install into prefixes > 80 "
+                                            "characters.")
                                 config.prefix_length = 80
 
                                 # Set this here and use to create environ
-                                #   Setting this here is important because we use it below (symlink)
+                                #   Setting this here is important because we use it below
+                                #      (symlink)
                                 prefix = config.build_prefix
 
                                 create_env(prefix, specs, config=config,
                                             clear_cache=clear_cache)
                             else:
                                 raise
-                        elif 'lock' in str(exc):
+
+                        elif any(etype in exc_text for etype in ('NoPackagesFoundError',
+                                                                 'PackageNotFoundError',
+                                                                 'Unsatisfiable',
+                                                                 'CondaValueError')):
+                            raise RuntimeError(exc_text)
+
+                        # HACK: some of the time, conda screws up somehow and incomplete packages
+                        #    result.  Just retry.
+                        elif 'lock' in exc_text or any(etype in exc_text for etype in ('IOError',
+                                                                                'AssertionError',
+                                                                                'ValueError',
+                                                                                'RuntimeError')):
                             if retry < config.max_env_retry:
-                                log.warn("failed to create env, retrying.  exception was: %s", str(exc))
+                                log.warn("failed to create env, retrying.  exception was: %s",
+                                            str(exc))
                                 create_env(prefix, specs, config=config,
                                         clear_cache=clear_cache, retry=retry + 1)
-                    # HACK: some of the time, conda screws up somehow and incomplete packages result.
-                    #    Just retry.
-                    except (AssertionError, IOError, ValueError, RuntimeError, LockError) as exc:
-                        if retry < config.max_env_retry:
-                            log.warn("failed to create env, retrying.  exception was: %s", str(exc))
-                            create_env(prefix, specs, config=config,
-                                    clear_cache=clear_cache, retry=retry + 1)
+                            else:
+                                log.error("Failed to create env, max retries exceeded.")
+                                raise
                         else:
-                            log.error("Failed to create env, max retries exceeded.")
                             raise
 
-        # ensure prefix exists, even if empty, i.e. when specs are empty
-        if not os.path.isdir(prefix):
-            os.makedirs(prefix)
-        if utils.on_win:
-            shell = "cmd.exe"
-        else:
-            shell = "bash"
-        symlink_conda(prefix, sys.prefix, shell)
+            # ensure prefix exists, even if empty, i.e. when specs are empty
+            if not os.path.isdir(prefix):
+                os.makedirs(prefix)
+            if utils.on_win:
+                shell = "cmd.exe"
+            else:
+                shell = "bash"
+            symlink_conda(prefix, sys.prefix, shell)

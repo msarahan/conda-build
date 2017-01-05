@@ -364,7 +364,10 @@ class Config(object):
     @property
     def bldpkgs_dirs(self):
         """ Dirs where previous build packages might be. """
-        return join(self.croot, self.subdir), join(self.croot, "noarch")
+        # The first two *might* be the same, but might not, depending on if this is a cross-compile.
+        #     cc.subdir should be the native platform, while self.subdir would be the host platform.
+        return {join(self.croot, self.subdir), join(self.croot, cc.subdir),
+                join(self.croot, "noarch"), }
 
     @property
     def src_cache(self):

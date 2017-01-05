@@ -3,7 +3,6 @@ from __future__ import absolute_import, division, print_function
 import base64
 from collections import defaultdict
 import contextlib
-import copy
 import fnmatch
 from glob import glob
 import json
@@ -27,8 +26,9 @@ import filelock
 from .conda_interface import md5_file, unix_path_to_win, win_path_to_unix
 from .conda_interface import PY3, iteritems
 from .conda_interface import root_dir
-from .conda_interface import string_types
-from .conda_interface import url_path, get_index
+from .conda_interface import string_types, StringIO
+from .conda_interface import url_path
+from .conda_interface import get_rc_urls, get_index
 
 from conda_build.os_utils import external
 
@@ -286,10 +286,12 @@ def relative(f, d='lib'):
 def _check_call(args, **kwargs):
     if 'env' in kwargs:
         kwargs['env'] = {str(key): str(value) for key, value in kwargs['env'].items()}
-    try:
-        subprocess.check_call(args, **kwargs)
-    except subprocess.CalledProcessError as e:
-        sys.exit('Command failed: %s, output: %s' % (' '.join(args), str(e)))
+    else:
+        kwargs['env'] = os.environ
+    proc = subprocess.Popen(args, stderr=subprocess.PIPE, **kwargs)
+    out, err = proc.communicate()
+    if proc.returncode != 0:
+        sys.exit('Command failed: %s, stderr: %s' % (' '.join(args), err))
 
 
 def tar_xf(tarball, dir_path, mode='r:*'):
@@ -757,19 +759,6 @@ class LoggingContext(object):
         # implicit return of None => don't swallow exceptions
 
 
-def get_build_index(config, clear_cache=True):
-    # priority: local by croot (can vary), then channels passed as args,
-    #     then channels from config.
-    urls = list(config.channel_urls)
-    if os.path.isdir(config.croot):
-        urls.insert(0, url_path(config.croot))
-    index = get_index(channel_urls=urls,
-                      prepend=not config.override_channels,
-                      use_local=False,
-                      use_cache=not clear_cache)
-    return index
-
-
 # http://stackoverflow.com/a/10743550/1170370
 @contextlib.contextmanager
 def capture():
@@ -784,3 +773,49 @@ def capture():
         sys.stdout, sys.stderr = oldout, olderr
         out[0] = out[0].getvalue()
         out[1] = out[1].getvalue()
+
+
+# copied from conda; added in 4.3, not currently part of exported functionality
+@contextlib.contextmanager
+def env_var(name, value, callback=None):
+    # NOTE: will likely want to call reset_context() when using this function, so pass
+    #       it as callback
+    name, value = str(name), str(value)
+    saved_env_var = os.environ.get(name)
+    try:
+        os.environ[name] = value
+        if callback:
+            callback()
+        yield
+    finally:
+        if saved_env_var:
+            os.environ[name] = saved_env_var
+        else:
+            del os.environ[name]
+        if callback:
+            callback()
+
+
+def collect_channels(config, is_host=False):
+    urls = [url_path(config.croot)] + get_rc_urls() + ['local', ]
+    if config.channel_urls:
+        urls.extend(config.channel_urls)
+    # defaults has a very limited set of repo urls.  Omit it from the URL list so
+    #     that it doesn't fail.
+    if config.has_separate_host_prefix and is_host:
+        urls.remove('defaults')
+        urls.remove('local')
+    return urls
+
+
+def get_build_index(config, clear_cache=True):
+    # priority: local by croot (can vary), then channels passed as args,
+    #     then channels from config.
+    urls = list(config.channel_urls)
+    if os.path.isdir(config.croot):
+        urls.insert(0, url_path(config.croot))
+    index = get_index(channel_urls=urls,
+                      prepend=not config.override_channels,
+                      use_local=False,
+                      use_cache=not clear_cache)
+    return index
