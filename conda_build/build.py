@@ -40,8 +40,8 @@ from .conda_interface import url_path
 from .conda_interface import Resolve, MatchSpec, Unsatisfiable
 from .conda_interface import TemporaryDirectory
 from .conda_interface import VersionOrder
-from .conda_interface import (PaddingError, LinkError, CondaValueError,
-                              NoPackagesFoundError, NoPackagesFound, LockError)
+from .conda_interface import (PaddingError, LinkError, CondaValueError, CondaHTTPError,
+                              NoPackagesFoundError, NoPackagesFound, LockError, PackageNotFoundError)
 from .conda_interface import text_type
 from .conda_interface import CrossPlatformStLink
 from .conda_interface import PathType, FileMode
@@ -59,7 +59,7 @@ from conda_build.metadata import build_string_from_metadata, HASH_LENGTH
 from conda_build.index import update_index
 from conda_build.create_test import (create_files, create_shell_files,
                                      create_py_files, create_pl_files)
-from conda_build.exceptions import indent
+from conda_build.exceptions import indent, DependencyNeedsBuildingError
 from conda_build.features import feature_list
 
 import conda_build.noarch_python as noarch_python
@@ -1297,12 +1297,15 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                             built_packages.append(pkg)
                     else:
                         built_packages.extend(packages_from_this)
-        except (NoPackagesFound, NoPackagesFoundError, Unsatisfiable, CondaValueError, RuntimeError) as e:
+        except (NoPackagesFound, PackageNotFoundError, NoPackagesFoundError, Unsatisfiable,
+                CondaValueError, DependencyNeedsBuildingError) as e:
+            import ipdb; ipdb.set_trace()
             error_str = str(e)
             skip_names = ['python', 'r']
             add_recipes = []
             # add the failed one back in at the beginning - but its deps may come before it
             recipe_list.extendleft([recipe])
+            original_recipe_list = copy.deepcopy(recipe_list)
             for line in error_str.splitlines():
                 if not line.startswith('  - '):
                     continue
@@ -1332,6 +1335,9 @@ packages, the other package needs to be rebuilt
                     raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n"
                                        .format(recipe) + error_str + "\n\n" + extra_help)
             recipe_list.extendleft(add_recipes)
+            # we didn't add any recipes, so we don't expect to be able to fix this error.  Reraise it.
+            if len(recipe_list) == len(original_recipe_list):
+                raise RuntimeError(error_str)
         except SystemExit:
             raise
 
@@ -1450,13 +1456,13 @@ def is_package_built(metadata):
         try:
             utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
             built = True
-        except SystemExit:
+        except (CondaHTTPError, SystemExit):
             # retry, omitting defaults
             with env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(config, is_host=True))):
                 try:
                     utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
                     built = True
-                except SystemExit:
+                except (CondaHTTPError, SystemExit):
                     built = False
     return built
 

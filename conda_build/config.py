@@ -111,7 +111,7 @@ class Config(object):
                   Setting('prefix_length_fallback', True),
                   Setting('_prefix_length', DEFAULT_PREFIX_LENGTH),
                   Setting('locking', True),
-                  Setting('max_env_retry', 3),
+                  Setting('max_env_retry', 1),
                   Setting('has_separate_host_prefix', False),
 
                   # variants

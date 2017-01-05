@@ -57,7 +57,10 @@ if parse_version(conda.__version__) >= parse_version("4.2"):
     PaddingError = conda.exceptions.PaddingError
     LinkError = conda.exceptions.LinkError
     NoPackagesFoundError = conda.exceptions.NoPackagesFoundError
+    PackageNotFoundError = conda.exceptions.PackageNotFoundError
+    UnsatisfiableError = conda.exceptions.UnsatisfiableError
     CondaValueError = conda.exceptions.CondaValueError
+    CondaHTTPError = conda.exceptions.CondaHTTPError
     LockError = conda.exceptions.LockError
     reset_context = conda.base.context.reset_context
 
@@ -102,7 +105,16 @@ else:
     class NoPackagesFoundError(Exception):
         pass
 
+    class PackageNotFoundError(Exception):
+        pass
+
     class CondaValueError(Exception):
+        pass
+
+    class CondaHTTPError(Exception):
+        pass
+
+    class UnsatisfiableError(Exception):
         pass
 
     env_path_backup_var_exists = os.environ.get('CONDA_PATH_BACKUP', None)

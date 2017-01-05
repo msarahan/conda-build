@@ -26,9 +26,10 @@ import filelock
 from .conda_interface import md5_file, unix_path_to_win, win_path_to_unix
 from .conda_interface import PY3, iteritems
 from .conda_interface import root_dir
-from .conda_interface import string_types, StringIO
+from .conda_interface import string_types
 from .conda_interface import url_path
 from .conda_interface import get_rc_urls, get_index
+from .conda_interface import CondaHTTPError
 
 from conda_build.os_utils import external
 
@@ -808,14 +809,25 @@ def collect_channels(config, is_host=False):
     return urls
 
 
-def get_build_index(config, clear_cache=True):
+def get_build_index(config, clear_cache=True, omit_defaults=False):
     # priority: local by croot (can vary), then channels passed as args,
     #     then channels from config.
     urls = list(config.channel_urls)
     if os.path.isdir(config.croot):
         urls.insert(0, url_path(config.croot))
-    index = get_index(channel_urls=urls,
-                      prepend=not config.override_channels,
-                      use_local=False,
-                      use_cache=not clear_cache)
+    try:
+        index = get_index(channel_urls=urls,
+                        prepend=(not config.override_channels),
+                        use_local=False,
+                        use_cache=not clear_cache,
+                          platform=config.subdir)
+    # HACK: defaults does not have the many subfolders we support.  Omit it and try again.
+    except CondaHTTPError:
+        # import ipdb; ipdb.set_trace()
+        urls.remove('defaults')
+        index = get_index(channel_urls=urls,
+                          prepend=config.override_channels,
+                          use_local=False,
+                          use_cache=not clear_cache,
+                          platform=config.subdir)
     return index

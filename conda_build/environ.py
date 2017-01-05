@@ -17,7 +17,8 @@ import subprocess
 from .conda_interface import text_type, PY3  # noqa
 from .conda_interface import root_dir, cc, plan, symlink_conda, linked
 from .conda_interface import (PaddingError, LinkError, LockError, NoPackagesFound,
-                              NoPackagesFoundError)
+                              NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
+                              CondaValueError, UnsatisfiableError)
 from .conda_interface import Resolve, MatchSpec, VersionOrder
 from .conda_interface import reset_context
 
@@ -26,7 +27,10 @@ from conda_build import utils
 from conda_build.features import feature_list
 from conda_build.utils import prepend_bin_path, ensure_list
 from conda_build.index import update_index
+from conda_build.exceptions import DependencyNeedsBuildingError
 
+# pretty vile hack.  Run conda's cli, but do so in this process, so that we can catch exceptions.
+import conda.cli.main
 
 def get_perl_ver(config):
     return str(config.CONDA_PERL)
@@ -609,8 +613,6 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         host_subdir_set = contextlib.contextmanager(lambda: (yield))
         is_host = False
 
-    import ipdb; ipdb.set_trace()
-
     with capture():
         with external_logger_context:
             log = logging.getLogger(__name__)
@@ -660,13 +662,16 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                                        ','.join(utils.collect_channels(config,
                                                                                        is_host)),
                                                        callback=reset_context):
-                                        cmd = 'conda create -yp {prefix} {specs}'.format(
-                                            prefix=prefix, specs=" ".join(specs))
-                                        utils._check_call(cmd.split(' '), env=os.environ)
+                                        cmd = 'create -yp {prefix} {specs}'.format(
+                                            prefix=prefix, specs=" ".join(specs)).split()
+                                        if config.debug:
+                                            cmd.insert(1, '--debug')
+                                        conda.cli.main(*cmd)
 
                                 index = utils.get_build_index(config=config, clear_cache=True)
                                 warn_on_old_conda_build(index=index)
                     except (SystemExit, PaddingError, LinkError) as exc:
+                        import ipdb; ipdb.set_trace()
                         exc_text = str(exc)
                         if (("too short in" in exc_text or
                                 'post-link failed for: openssl' in exc_text or
@@ -690,31 +695,28 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                 prefix = config.build_prefix
 
                                 create_env(prefix, specs, config=config,
-                                            clear_cache=clear_cache)
+                                            clear_cache=clear_cache, retry=retry)
                             else:
+                                import ipdb; ipdb.set_trace()
                                 raise
 
-                        elif any(etype in exc_text for etype in ('NoPackagesFoundError',
-                                                                 'PackageNotFoundError',
-                                                                 'Unsatisfiable',
-                                                                 'CondaValueError')):
-                            raise RuntimeError(exc_text)
+                    except(NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
+                           UnsatisfiableError, CondaValueError):
+                        import ipdb; ipdb.set_trace()
+                        raise DependencyNeedsBuildingError(exc_text)
 
-                        # HACK: some of the time, conda screws up somehow and incomplete packages
-                        #    result.  Just retry.
-                        elif 'lock' in exc_text or any(etype in exc_text for etype in ('IOError',
-                                                                                'AssertionError',
-                                                                                'ValueError',
-                                                                                'RuntimeError')):
-                            if retry < config.max_env_retry:
-                                log.warn("failed to create env, retrying.  exception was: %s",
-                                            str(exc))
-                                create_env(prefix, specs, config=config,
+                    # HACK: some of the time, conda screws up somehow and incomplete packages
+                    #    result.  Just retry.
+                    except (IOError, AssertionError, ValueError, RuntimeError):
+                        import ipdb; ipdb.set_trace()
+                        if retry < config.max_env_retry:
+                            log.warn("failed to create env, retrying (%d of %d).  "
+                                        "exception was: %s",
+                                        retry, config.max_env_retry, str(exc))
+                            create_env(prefix, specs, config=config,
                                         clear_cache=clear_cache, retry=retry + 1)
-                            else:
-                                log.error("Failed to create env, max retries exceeded.")
-                                raise
                         else:
+                            log.error("Failed to create env, max retries exceeded.")
                             raise
 
             # ensure prefix exists, even if empty, i.e. when specs are empty

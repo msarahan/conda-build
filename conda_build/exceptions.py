@@ -56,3 +56,7 @@ class VerifyError(CondaBuildException):
         self.script = script
         self.msg = "%s failed to verify\n%s" % (script, error)
         super(VerifyError, self).__init__(self.msg)
+
+
+class DependencyNeedsBuildingError(CondaBuildException):
+    pass
