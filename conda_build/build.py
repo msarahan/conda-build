@@ -46,6 +46,7 @@ from .conda_interface import text_type
 from .conda_interface import CrossPlatformStLink
 from .conda_interface import PathType, FileMode
 from .conda_interface import EntityEncoder
+from .conda_interface import conda_main
 
 from conda_build import __version__
 from conda_build import environ, source, tarcheck, utils
@@ -961,6 +962,8 @@ can lead to packages that include their dependencies.""" % meta_files))
 
         for folder in output_folders:
             update_index(folder, m.config, could_be_mirror=False)
+        # force conda to regenerate its package indices
+        conda_main('clean', '-yi')
 
     else:
         print("STOPPING BUILD BEFORE POST:", m.dist())
@@ -1029,7 +1032,6 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
     '''
     # we want to know if we're dealing with package input.  If so, we can move the input on success.
     need_cleanup = False
-
 
     if hasattr(recipedir_or_package_or_metadata, 'config'):
         metadata_tuples = [(recipedir_or_package_or_metadata, None, None)]

@@ -606,9 +606,13 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         # feature added in conda 4.2.14.  Cross-compiling won't work with earlier versions.
         host_subdir_set = partial(utils.env_var, 'CONDA_SUBDIR',
                                   config.subdir, callback=reset_context)
+
+        pkgs_subdir_set = partial(utils.env_var, 'CONDA_PKGS_DIRS', config.croot,
+                                  callback=reset_context)
         is_host = True
     else:
         host_subdir_set = contextlib.contextmanager(lambda: (yield))
+        pkgs_subdir_set = contextlib.contextmanager(lambda: (yield))
         is_host = False
 
     with capture():
@@ -626,7 +630,6 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
 
             if specs:  # Don't waste time if there is nothing to do
                 log.debug("Creating environment in %s", prefix)
-                log.debug(str(specs))
 
                 with utils.path_prepended(prefix):
                     locks = []
@@ -656,13 +659,11 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
 
                             with utils.ExitStack() as stack:
                                 stack.enter_context(host_subdir_set())
-                                stack.enter_context(pip_set())
+                                stack.enter_context(pkgs_subdir_set())
                                 stack.enter_context(pip_set())
                                 stack.enter_context(utils.env_var('CONDA_CHANNELS',
                                                         ','.join(utils.collect_channels(config,
                                                                                         is_host)),
-                                                                  callback=reset_context))
-                                stack.enter_context(utils.env_var('CONDA_PKGS_DIRS', config.croot,
                                                                   callback=reset_context))
                                 cmd = 'create -yp {prefix} {specs}'.format(
                                     prefix=prefix, specs=" ".join(specs)).split()
