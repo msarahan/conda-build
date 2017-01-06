@@ -20,7 +20,7 @@ from .conda_interface import (PaddingError, LinkError, LockError, NoPackagesFoun
                               NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
                               CondaValueError, UnsatisfiableError)
 from .conda_interface import Resolve, MatchSpec, VersionOrder
-from .conda_interface import reset_context
+from .conda_interface import reset_context, conda_main
 
 from conda_build.os_utils import external
 from conda_build import utils
@@ -666,12 +666,12 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                             prefix=prefix, specs=" ".join(specs)).split()
                                         if config.debug:
                                             cmd.insert(1, '--debug')
-                                        conda.cli.main(*cmd)
+
+                                        conda_main(*cmd)
 
                                 index = utils.get_build_index(config=config, clear_cache=True)
                                 warn_on_old_conda_build(index=index)
                     except (SystemExit, PaddingError, LinkError) as exc:
-                        import ipdb; ipdb.set_trace()
                         exc_text = str(exc)
                         if (("too short in" in exc_text or
                                 'post-link failed for: openssl' in exc_text or
@@ -697,18 +697,15 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                 create_env(prefix, specs, config=config,
                                             clear_cache=clear_cache, retry=retry)
                             else:
-                                import ipdb; ipdb.set_trace()
                                 raise
 
                     except(NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
-                           UnsatisfiableError, CondaValueError):
-                        import ipdb; ipdb.set_trace()
-                        raise DependencyNeedsBuildingError(exc_text)
+                           UnsatisfiableError, CondaValueError) as exc:
+                        raise DependencyNeedsBuildingError(str(exc))
 
                     # HACK: some of the time, conda screws up somehow and incomplete packages
                     #    result.  Just retry.
-                    except (IOError, AssertionError, ValueError, RuntimeError):
-                        import ipdb; ipdb.set_trace()
+                    except (IOError, AssertionError, ValueError, RuntimeError) as exc:
                         if retry < config.max_env_retry:
                             log.warn("failed to create env, retrying (%d of %d).  "
                                         "exception was: %s",

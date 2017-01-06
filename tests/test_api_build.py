@@ -402,11 +402,11 @@ def test_render_setup_py_old_funcname(testing_workdir, test_config, caplog):
 
 def test_debug_build_option(test_metadata, caplog, capfd):
     logging.basicConfig(level=logging.INFO)
-    info_message = "Starting new HTTPS connection"
-    debug_message = "GET /pkgs/free/noarch/repodata.json.bz2 HTTP/1.1"
+    info_message = "INFO"
+    debug_message = "DEBUG"
     api.build(test_metadata)
     # this comes from an info message
-    assert info_message not in caplog.text()
+    assert info_message in caplog.text()
     # this comes from a debug message
     assert debug_message not in caplog.text()
 

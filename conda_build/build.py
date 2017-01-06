@@ -306,8 +306,7 @@ def detect_and_record_prefix_files(m, files, prefix):
     files_with_prefix = get_files_with_prefix(m, files, prefix)
     binary_has_prefix_files = m.binary_has_prefix_files()
     text_has_prefix_files = m.has_prefix_files()
-    is_noarch = (m.get_value('build/noarch_python') or is_noarch_python(m) or
-                 m.get_value('build/noarch'))
+    is_noarch = m.config.noarch
 
     if files_with_prefix and not is_noarch:
         if utils.on_win:
@@ -353,7 +352,7 @@ def write_info_files_file(m, files):
     with open(join(m.config.info_dir, 'files'), **mode_dict) as fo:
         if m.get_value('build/noarch_python'):
             fo.write('\n')
-        elif is_noarch_python(m):
+        elif m.config.noarch and is_noarch_python(m):
             for f in files:
                 if f.find("site-packages") >= 0:
                     fo.write(f[f.find("site-packages"):] + '\n')
@@ -784,7 +783,7 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
 
         environ.create_env(m.config.build_prefix, specs, config=m.config)
 
-        if 'host' in m.meta.get('requirements', {}):
+        if m.config.has_separate_host_prefix:
             specs = [ms.spec for ms in m.ms_depends('host')]
             environ.create_env(m.config.host_prefix, specs, config=m.config)
 
@@ -1299,7 +1298,6 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                         built_packages.extend(packages_from_this)
         except (NoPackagesFound, PackageNotFoundError, NoPackagesFoundError, Unsatisfiable,
                 CondaValueError, DependencyNeedsBuildingError) as e:
-            import ipdb; ipdb.set_trace()
             error_str = str(e)
             skip_names = ['python', 'r']
             add_recipes = []

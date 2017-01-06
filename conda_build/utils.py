@@ -823,7 +823,6 @@ def get_build_index(config, clear_cache=True, omit_defaults=False):
                           platform=config.subdir)
     # HACK: defaults does not have the many subfolders we support.  Omit it and try again.
     except CondaHTTPError:
-        # import ipdb; ipdb.set_trace()
         urls.remove('defaults')
         index = get_index(channel_urls=urls,
                           prepend=config.override_channels,

@@ -29,6 +29,13 @@ from enum import Enum
 import os
 
 
+if parse_version(conda.__version__) >= parse_version("4.3"):
+    from conda.cli import python_api
+    conda_main = python_api.run_command
+else:
+    conda_main = conda.cli.main
+
+
 if parse_version(conda.__version__) >= parse_version("4.2"):
     # conda 4.2.x
     import conda.base.context

@@ -179,7 +179,8 @@ def render_recipe(recipe_path, config, no_download_source=False):
             environ.create_env(config.build_prefix, specs, config=config)
         reparse(entry[0])
 
-    config.noarch = bool(m.get_value('build/noarch'))
+        entry[0].config.noarch = bool((entry[0].get_value('build/noarch') or
+                                       entry[0].get_value('build/noarch_python')))
 
     if need_cleanup:
         utils.rm_rf(recipe_dir)

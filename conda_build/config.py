@@ -152,8 +152,8 @@ class Config(object):
 
     @property
     def subdir(self):
-        if self.platform == 'noarch':
-            return self.platform
+        if self.platform == 'noarch' or self.noarch:
+            return 'noarch'
         else:
             return "-".join([self.platform, str(self.arch)])
 

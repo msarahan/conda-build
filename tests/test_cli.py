@@ -332,7 +332,7 @@ def test_develop(testing_env):
     assert (cwd not in open(os.path.join(get_site_packages(testing_env), 'conda.pth')).read())
 
 
-def test_convert(testing_workdir):
+def test_convert(testing_workdir, test_config):
     # download a sample py2.7 package
     f = 'https://repo.continuum.io/pkgs/free/win-64/affine-2.0.0-py27_0.tar.bz2'
     pkg_name = "affine-2.0.0-py27_0.tar.bz2"
@@ -345,8 +345,9 @@ def test_convert(testing_workdir):
         dirname = os.path.join('converted', platform)
         assert os.path.isdir(dirname)
         assert pkg_name in os.listdir(dirname)
-        with TarCheck(os.path.join(dirname, pkg_name)) as tar:
-            tar.correct_subdir(platform)
+        test_config.subdir = platform
+        with TarCheck(os.path.join(dirname, pkg_name), config=test_config) as tar:
+            tar.correct_subdir()
 
 
 def test_sign(testing_workdir):
