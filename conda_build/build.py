@@ -197,9 +197,13 @@ def get_deps(m, machine, prefix):
 def finalize_metadata(m):
     """Fully render a recipe.  Fill in versions for build dependencies."""
     rendered_metadata = copy.deepcopy(m)
+    build_deps = []
+    host_deps = []
     # fill in build versions used
-    build_deps = get_deps(m, 'build', m.config.build_prefix)
-    host_deps = get_deps(m, 'host', m.config.host_prefix)
+    if glob(os.path.join(m.config.build_prefix, '*')):
+        build_deps = get_deps(m, 'build', m.config.build_prefix)
+    if glob(os.path.join(m.config.host_prefix, '*')):
+        host_deps = get_deps(m, 'host', m.config.host_prefix)
 
     if not rendered_metadata.meta.get('build'):
         rendered_metadata.meta['build'] = {}
@@ -207,8 +211,10 @@ def finalize_metadata(m):
     rendered_metadata.meta['build']['string'] = m.build_id()
 
     rendered_metadata.meta['requirements'] = rendered_metadata.meta.get('requirements', {})
-    rendered_metadata.meta['requirements']['build'] = build_deps
-    rendered_metadata.meta['requirements']['host'] = host_deps
+    if build_deps:
+        rendered_metadata.meta['requirements']['build'] = build_deps
+    if host_deps:
+        rendered_metadata.meta['requirements']['host'] = host_deps
 
     # if source/path is relative, then the output package makes no sense at all.  The next
     #   best thing is to hard-code the absolute path.  This probably won't exist on any
@@ -1024,6 +1030,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
     # we want to know if we're dealing with package input.  If so, we can move the input on success.
     need_cleanup = False
 
+
     if hasattr(recipedir_or_package_or_metadata, 'config'):
         metadata_tuples = [(recipedir_or_package_or_metadata, None, None)]
         config = recipedir_or_package_or_metadata.config
@@ -1035,6 +1042,12 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
         #   What this means is that if we're running a test immediately after build, we use the one
         #   that the build already provided
         try:
+            info_dir = os.path.normpath(os.path.join(recipe_dir, 'info'))
+            if os.path.isdir(info_dir):
+                with open(os.path.join(info_dir, 'index.json')) as f:
+                    config.subdir = json.load(f)['subdir']
+                if config.subdir != cc.subdir:
+                    config.has_separate_host_prefix = True
             metadata_tuples = render_recipe(recipe_dir, config=config)
         except IOError:
             raise IOError("Didn't find recipe in folder or package under test.  Can't test this after exiting build.")

@@ -662,22 +662,15 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                                         ','.join(utils.collect_channels(config,
                                                                                         is_host)),
                                                                   callback=reset_context))
-                                pkg_dir = (cc.subdir if (config.has_separate_host_prefix and
-                                                os.path.basename(prefix).startswith("_b")) else
-                                           config.subdir)
-                                stack.enter_context(utils.env_var('CONDA_PKGS_DIRS',
-                                                                  os.path.join(config.croot,
-                                                                               pkg_dir),
+                                stack.enter_context(utils.env_var('CONDA_PKGS_DIRS', config.croot,
                                                                   callback=reset_context))
                                 cmd = 'create -yp {prefix} {specs}'.format(
                                     prefix=prefix, specs=" ".join(specs)).split()
                                 if config.debug:
                                     cmd.insert(1, '--debug')
-
+                                reset_context()
                                 conda_main(*cmd)
 
-                            index = utils.get_build_index(config=config, clear_cache=True)
-                            warn_on_old_conda_build(index=index)
                     except (SystemExit, PaddingError, LinkError) as exc:
                         exc_text = str(exc)
                         if (("too short in" in exc_text or

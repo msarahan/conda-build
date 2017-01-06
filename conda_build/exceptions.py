@@ -66,23 +66,12 @@ class VerifyError(CondaBuildException):
 class DependencyNeedsBuildingError(CondaBuildException):
     def __init__(self, CondaException, *args, **kwargs):
         self.packages = []
-        if isinstance(CondaException, PackageNotFoundError):
-            match = re.search("Package not found: ['\"](.*)['\"]", str(CondaException))
-            if not match:
-                raise RuntimeError("Error parsing package from PackageNotFoundError")
-            pkg = match.groups()[0]
+        for line in str(CondaException).splitlines():
+            if not line.startswith('  - '):
+                continue
+            pkg = line.lstrip('  - ').split(' -> ')[-1]
+            pkg = pkg.strip().split(' ')[0]
             self.packages.append(pkg)
-
-        elif isinstance(CondaException, NoPackagesFoundError):
-            for line in str(CondaException).splitlines():
-                if not line.startswith('  - '):
-                    continue
-                pkg = line.lstrip('  - ').split(' -> ')[-1]
-                pkg = pkg.strip().split(' ')[0]
-                self.packages.append(pkg)
-        else:
-            raise RuntimeError("Don't know how to extract dependency from exception "
-                               "type {}".format(type(CondaException)))
         if not self.packages:
             raise RuntimeError("failed to parse packages from exception:"
                                " {}".format(str(CondaException)))
