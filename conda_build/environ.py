@@ -707,7 +707,7 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
 
                     except(NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
                            UnsatisfiableError, CondaValueError) as exc:
-                        raise DependencyNeedsBuildingError(str(exc))
+                        raise DependencyNeedsBuildingError(exc)
 
                     # HACK: some of the time, conda screws up somehow and incomplete packages
                     #    result.  Just retry.

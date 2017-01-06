@@ -1299,21 +1299,15 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                     else:
                         built_packages.extend(packages_from_this)
         except DependencyNeedsBuildingError as e:
-            error_str = str(e)
             skip_names = ['python', 'r']
             add_recipes = []
             # add the failed one back in at the beginning - but its deps may come before it
             recipe_list.extendleft([recipe])
             original_recipe_list = copy.deepcopy(recipe_list)
-            for line in error_str.splitlines():
-                if not line.startswith('  - '):
-                    continue
-                pkg = line.lstrip('  - ').split(' -> ')[-1]
-                pkg = pkg.strip().split(' ')[0]
-
+            for pkg in e.packages:
                 if pkg in to_build_recursive:
-                    raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n"
-                                       .format(recipe) + error_str + "\n" + extra_help)
+                    raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n {1}"
+                                       .format(recipe, e.packages)  + "\n" + extra_help)
 
                 if pkg in skip_names:
                     to_build_recursive.append(pkg)
@@ -1325,7 +1319,6 @@ packages, the other package needs to be rebuilt
                 recipe_glob = glob(os.path.join(recipe_parent_dir, pkg))
                 if recipe_glob:
                     for recipe_dir in recipe_glob:
-                        print(error_str)
                         print(("Missing dependency {0}, but found" +
                                 " recipe directory, so building " +
                                 "{0} first").format(pkg))
@@ -1334,9 +1327,10 @@ packages, the other package needs to be rebuilt
                     raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n"
                                        .format(recipe) + error_str + "\n\n" + extra_help)
             recipe_list.extendleft(add_recipes)
+
             # we didn't add any recipes, so we don't expect to be able to fix this error.  Reraise it.
             if len(recipe_list) == len(original_recipe_list):
-                raise RuntimeError(error_str)
+                raise RuntimeError("could not build {}, aborting build".format(pkg))
 
         # outputs message, or does upload, depending on value of args.anaconda_upload
         if post in [True, None]:

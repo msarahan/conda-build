@@ -29,14 +29,7 @@ from enum import Enum
 import conda.base.context
 import conda.exceptions
 from conda.models.channel import get_conda_build_local_url
-
-
-if parse_version(conda.__version__) >= parse_version("4.3"):
-    from conda.cli import python_api
-    conda_main = python_api.run_command
-else:
-    from conda.cli.main import _main
-    conda_main = _main
+from conda.cli.main import _main
 
 
 from conda.base.context import get_prefix as context_get_prefix, non_x86_linux_machines  # NOQA
@@ -68,6 +61,7 @@ CondaValueError = conda.exceptions.CondaValueError
 CondaHTTPError = conda.exceptions.CondaHTTPError
 LockError = conda.exceptions.LockError
 reset_context = conda.base.context.reset_context
+conda_main = _main
 
 # disallow softlinks.  This avoids a lot of dumb issues, at the potential cost of disk space.
 conda.base.context.context.allow_softlinks = False
