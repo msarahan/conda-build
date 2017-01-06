@@ -698,6 +698,8 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                             clear_cache=clear_cache, retry=retry)
                             else:
                                 raise
+                        else:
+                            raise
 
                     except(NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
                            UnsatisfiableError, CondaValueError) as exc:

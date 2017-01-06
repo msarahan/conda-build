@@ -1296,8 +1296,7 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                             built_packages.append(pkg)
                     else:
                         built_packages.extend(packages_from_this)
-        except (NoPackagesFound, PackageNotFoundError, NoPackagesFoundError, Unsatisfiable,
-                CondaValueError, DependencyNeedsBuildingError) as e:
+        except DependencyNeedsBuildingError as e:
             error_str = str(e)
             skip_names = ['python', 'r']
             add_recipes = []
@@ -1336,8 +1335,6 @@ packages, the other package needs to be rebuilt
             # we didn't add any recipes, so we don't expect to be able to fix this error.  Reraise it.
             if len(recipe_list) == len(original_recipe_list):
                 raise RuntimeError(error_str)
-        except SystemExit:
-            raise
 
         # outputs message, or does upload, depending on value of args.anaconda_upload
         if post in [True, None]:
