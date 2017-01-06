@@ -15,7 +15,7 @@ import subprocess
 
 # noqa here because PY3 is used only on windows, and trips up flake8 otherwise.
 from .conda_interface import text_type, PY3  # noqa
-from .conda_interface import root_dir, cc, plan, symlink_conda, linked
+from .conda_interface import root_dir, cc, symlink_conda, linked
 from .conda_interface import (PaddingError, LinkError, LockError, NoPackagesFound,
                               NoPackagesFoundError, PackageNotFoundError, Unsatisfiable,
                               CondaValueError, UnsatisfiableError)
@@ -29,8 +29,6 @@ from conda_build.utils import prepend_bin_path, ensure_list
 from conda_build.index import update_index
 from conda_build.exceptions import DependencyNeedsBuildingError
 
-# pretty vile hack.  Run conda's cli, but do so in this process, so that we can catch exceptions.
-import conda.cli.main
 
 def get_perl_ver(config):
     return str(config.CONDA_PERL)
@@ -656,21 +654,27 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                             else:
                                 pip_set = contextlib.contextmanager(lambda: (yield))
 
-                            with host_subdir_set():
-                                with pip_set():
-                                    with utils.env_var('CONDA_CHANNELS',
-                                                       ','.join(utils.collect_channels(config,
-                                                                                       is_host)),
-                                                       callback=reset_context):
-                                        cmd = 'create -yp {prefix} {specs}'.format(
-                                            prefix=prefix, specs=" ".join(specs)).split()
-                                        if config.debug:
-                                            cmd.insert(1, '--debug')
+                            with utils.ExitStack() as stack:
+                                stack.enter_context(host_subdir_set())
+                                stack.enter_context(pip_set())
+                                stack.enter_context(pip_set())
+                                stack.enter_context(utils.env_var('CONDA_CHANNELS',
+                                                        ','.join(utils.collect_channels(config,
+                                                                                        is_host)),
+                                                                  callback=reset_context))
+                                stack.enter_context(utils.env_var('CONDA_PKGS_DIRS',
+                                                                  os.path.join(config.croot,
+                                                                               config.subdir),
+                                                                  callback=reset_context))
+                                cmd = 'create -yp {prefix} {specs}'.format(
+                                    prefix=prefix, specs=" ".join(specs)).split()
+                                if config.debug:
+                                    cmd.insert(1, '--debug')
 
-                                        conda_main(*cmd)
+                                conda_main(*cmd)
 
-                                index = utils.get_build_index(config=config, clear_cache=True)
-                                warn_on_old_conda_build(index=index)
+                            index = utils.get_build_index(config=config, clear_cache=True)
+                            warn_on_old_conda_build(index=index)
                     except (SystemExit, PaddingError, LinkError) as exc:
                         exc_text = str(exc)
                         if (("too short in" in exc_text or

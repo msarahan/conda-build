@@ -782,6 +782,7 @@ def test_build_expands_wildcards(mocker, testing_workdir):
 def test_cross_compiler(testing_workdir, test_config):
     # TODO: testing purposes.  Package on @mingwandroid's channel.
     test_config.channel_urls = ('rdonnelly', )
+    test_config.debug = True
     recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
     output = api.build(recipe_dir, config=test_config)[0]
     assert output.startswith(os.path.join(test_config.croot, 'linux-imx351uc'))
