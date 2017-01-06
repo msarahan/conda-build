@@ -1324,8 +1324,8 @@ packages, the other package needs to be rebuilt
                                 "{0} first").format(pkg))
                         add_recipes.append(recipe_dir)
                 else:
-                    raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n"
-                                       .format(recipe) + error_str + "\n\n" + extra_help)
+                    raise RuntimeError("Can't build {0} due to unsatisfiable dependencies:\n {1}"
+                                       .format(recipe, e.packages) + "\n\n" + extra_help)
             recipe_list.extendleft(add_recipes)
 
             # we didn't add any recipes, so we don't expect to be able to fix this error.  Reraise it.

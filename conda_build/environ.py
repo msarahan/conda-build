@@ -662,9 +662,12 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                                         ','.join(utils.collect_channels(config,
                                                                                         is_host)),
                                                                   callback=reset_context))
+                                pkg_dir = (cc.subdir if (config.has_separate_host_prefix and
+                                                os.path.basename(prefix).startswith("_b")) else
+                                           config.subdir)
                                 stack.enter_context(utils.env_var('CONDA_PKGS_DIRS',
                                                                   os.path.join(config.croot,
-                                                                               config.subdir),
+                                                                               pkg_dir),
                                                                   callback=reset_context))
                                 cmd = 'create -yp {prefix} {specs}'.format(
                                     prefix=prefix, specs=" ".join(specs)).split()
