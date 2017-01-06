@@ -36,6 +36,9 @@ except ImportError:
 on_win = (sys.platform == 'win32')
 
 HASH_LENGTH = 4
+# arches that don't follow exact names in the subdir need to be mapped here
+ARCH_MAP = {'32': 'x86',
+            '64': 'x86_64'}
 
 
 def ns_cfg(config):
@@ -789,7 +792,7 @@ class MetaData(object):
             build=self.build_id(),
             build_number=self.build_number() if self.build_number() else 0,
             platform=self.config.platform,
-            arch=self.config.arch,
+            arch=ARCH_MAP.get(self.config.arch, self.config.arch),
             subdir=self.config.subdir,
             depends=sorted(' '.join(ms.spec.split())
                              for ms in self.ms_depends()),

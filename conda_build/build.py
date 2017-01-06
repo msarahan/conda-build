@@ -962,8 +962,6 @@ can lead to packages that include their dependencies.""" % meta_files))
 
         for folder in output_folders:
             update_index(folder, m.config, could_be_mirror=False)
-        # force conda to regenerate its package indices
-        conda_main('clean', '-yi')
 
     else:
         print("STOPPING BUILD BEFORE POST:", m.dist())

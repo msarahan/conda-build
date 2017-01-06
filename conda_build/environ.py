@@ -607,8 +607,6 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         host_subdir_set = partial(utils.env_var, 'CONDA_SUBDIR',
                                   config.subdir, callback=reset_context)
 
-        pkgs_subdir_set = partial(utils.env_var, 'CONDA_PKGS_DIRS', config.croot,
-                                  callback=reset_context)
         is_host = True
     else:
         host_subdir_set = contextlib.contextmanager(lambda: (yield))
@@ -636,7 +634,10 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                     try:
                         if config.locking:
                             cc.pkgs_dirs = cc.pkgs_dirs[:1]
-                            locked_folders = cc.pkgs_dirs + list(config.bldpkgs_dirs)
+                            locked_folders = (cc.pkgs_dirs + list(config.bldpkgs_dirs) +
+                                              [os.path.join(cc.root_dir, 'conda-bld', arch)
+                                               for arch in ('noarch', config.subdir)])
+                            locked_folders = set(locked_folders)
                             for folder in locked_folders:
                                 if not os.path.isdir(folder):
                                     os.makedirs(folder)
@@ -664,6 +665,11 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                 stack.enter_context(utils.env_var('CONDA_CHANNELS',
                                                         ','.join(utils.collect_channels(config,
                                                                                         is_host)),
+                                                                  callback=reset_context))
+                                stack.enter_context(utils.env_var('CONDA_REPODATA_TIMEOUT_SECS', 0,
+                                                                  callback=reset_context))
+                                stack.enter_context(utils.env_var('CONDA_PKGS_DIRS',
+                                                                  config.croot,
                                                                   callback=reset_context))
                                 cmd = 'create -yp {prefix} {specs}'.format(
                                     prefix=prefix, specs=" ".join(specs)).split()
