@@ -793,6 +793,8 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
         environ.create_env(m.config.build_prefix, specs, config=m.config)
 
         if m.config.has_separate_host_prefix:
+            if VersionOrder(conda.__version__) < VersionOrder('4.3.2'):
+                raise RuntimeError("Non-native subdir support only in conda >= 4.3.2")
             specs = [ms.spec for ms in m.ms_depends('host')]
             environ.create_env(m.config.host_prefix, specs, config=m.config)
 
@@ -1107,7 +1109,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
             # as the tests are run by python, ensure that python is installed.
             # (If they already provided python as a run or test requirement,
             #  this won't hurt anything.)
-            specs += ['python %s*' % environ.get_py_ver(config)]
+            specs += ['python %s.*' % environ.get_py_ver(config)]
         if pl_files:
             # as the tests are run by perl, we need to specify it
             specs += ['perl %s*' % environ.get_perl_ver(config)]
@@ -1323,9 +1325,10 @@ def build_tree(recipe_list, config, build_only=False, post=False, notest=False,
                 if pkg in skip_names:
                     to_build_recursive.append(pkg)
                     extra_help = """Typically if a conflict is with the Python or R
-packages, the other package needs to be rebuilt
-(e.g., a conflict with 'python 3.5*' and 'x' means
-'x' isn't build for Python 3.5 and needs to be rebuilt."""
+packages, the other package or one of its dependencies
+needs to be rebuilt (e.g., a conflict with 'python 3.5*'
+and 'x' means 'x' or one of 'x' dependencies isn't built
+for Python 3.5 and needs to be rebuilt."""
 
                 recipe_glob = glob(os.path.join(recipe_parent_dir, pkg))
                 if recipe_glob:

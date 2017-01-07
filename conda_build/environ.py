@@ -635,10 +635,9 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                     try:
                         if config.locking:
                             cc.pkgs_dirs = cc.pkgs_dirs[:1]
-                            locked_folders = (cc.pkgs_dirs + list(config.bldpkgs_dirs) +
+                            locked_folders = set(cc.pkgs_dirs + list(config.bldpkgs_dirs) +
                                               [os.path.join(cc.root_dir, 'conda-bld', arch)
                                                for arch in ('noarch', config.host_subdir)])
-                            locked_folders = set(locked_folders)
                             for folder in locked_folders:
                                 if not os.path.isdir(folder):
                                     os.makedirs(folder)

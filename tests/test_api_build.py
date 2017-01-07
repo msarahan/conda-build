@@ -779,9 +779,13 @@ def test_build_expands_wildcards(mocker, testing_workdir):
 
 @pytest.mark.skipif(not sys.platform.startswith('linux'),
                     reason="cross compiler packages created only on Linux right now")
+@pytest.mark.xfail(VersionOrder(conda.__version__) < VersionOrder('4.3.2'),
+                   reason="subdir support only in later versions of conda")
 def test_cross_compiler(testing_workdir, test_config):
     # TODO: testing purposes.  Package on @mingwandroid's channel.
     test_config.channel_urls = ('rdonnelly', )
+    # activation is necessary to set the appropriate toolchain env vars
+    test_config.activate = True
     # test_config.debug = True
     recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
     output = api.build(recipe_dir, config=test_config)[0]

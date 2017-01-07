@@ -103,8 +103,6 @@ class Config(object):
                   Setting('verbose', True),
                   Setting('debug', False),
                   Setting('timeout', 90),
-                  Setting('arch', subdir.split('-')[-1]),
-                  Setting('platform', platform),
                   Setting('set_build_id', True),
                   Setting('disable_pip', False),
                   Setting('output_folder', None),
@@ -153,6 +151,16 @@ class Config(object):
             setattr(self, name, value)
 
     @property
+    def arch(self):
+        """Always the native (build system) arch"""
+        return cc.subdir.split('-')[-1]
+
+    @property
+    def platform(self):
+        """Always the native (build system) OS"""
+        return cc.platform
+
+    @property
     def build_subdir(self):
         if self.platform == 'noarch' or self.noarch:
             return 'noarch'
@@ -177,7 +185,7 @@ class Config(object):
 
     @property
     def host_subdir(self):
-        if self.platform == 'noarch' or self.noarch:
+        if self.host_platform == 'noarch' or self.noarch:
             return 'noarch'
         else:
             return "-".join([self.host_platform, str(self.host_arch)])
