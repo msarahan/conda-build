@@ -63,7 +63,7 @@ def test_warn_on_old_conda_build(test_config, capfd):
     # test with a conda-generated index first.  This is a list of Package objects,
     #    from which we just take the versions.
     environ.update_index(test_config.croot, test_config)
-    environ.update_index(os.path.join(test_config.croot, test_config.subdir), test_config)
+    environ.update_index(os.path.join(test_config.croot, test_config.host_subdir), test_config)
     environ.update_index(os.path.join(test_config.croot, 'noarch'), test_config)
     index = utils.get_build_index(test_config)
     # exercise the index code path, but this test is not at all deterministic.

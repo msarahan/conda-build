@@ -82,7 +82,7 @@ def test_build_output_build_path(testing_workdir, test_metadata, test_config, ca
     args = ['--output', os.path.join(testing_workdir)]
     main_build.execute(args)
     _hash = metadata._hash_dependencies()
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                                   "test_build_output_build_path-1.0-py{}{}{}_1.tar.bz2".format(
                                       sys.version_info.major, sys.version_info.minor, _hash))
     output, error = capfd.readouterr()
@@ -99,7 +99,7 @@ def test_build_output_build_path_multiple_recipes(testing_workdir, test_metadata
     main_build.execute(args)
 
     _hash = metadata._hash_dependencies()
-    test_path = lambda pkg: os.path.join(sys.prefix, "conda-bld", test_config.subdir, pkg)
+    test_path = lambda pkg: os.path.join(sys.prefix, "conda-bld", test_config.host_subdir, pkg)
     test_paths = [test_path(
         "test_build_output_build_path_multiple_recipes-1.0-py{}{}{}_1.tar.bz2".format(
             sys.version_info.major, sys.version_info.minor, _hash)),
@@ -215,7 +215,7 @@ def test_metapackage(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
     args = ['metapackage_test', '1.0', '-d', 'bzip2', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                              'metapackage_test-1.0*_0.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
@@ -224,7 +224,7 @@ def test_metapackage_build_number(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
     args = ['metapackage_test_build_number', '1.0', '-d', 'bzip2', '--build-number', '1', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                              'metapackage_test_build_number-1.0-*_1.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
@@ -233,7 +233,7 @@ def test_metapackage_build_string(test_config, testing_workdir):
     """the metapackage command creates a package with runtime dependencies specified on the CLI"""
     args = ['metapackage_test_build_string', '1.0', '-d', 'bzip2', '--build-string', 'frank', '--no-anaconda-upload']
     main_metapackage.execute(args)
-    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                              'metapackage_test_build_string-1.0-frank*.tar.bz2'))[0]
     assert os.path.isfile(test_path)
 
@@ -243,7 +243,7 @@ def test_metapackage_metadata(test_config, testing_workdir):
             "--summary", "wee", "--license", "BSD", '--no-anaconda-upload']
     main_metapackage.execute(args)
 
-    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = glob(os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                              'metapackage_test_metadata-1.0-*_0.tar.bz2'))[0]
     assert os.path.isfile(test_path)
     info = json.loads(package_has_file(test_path, 'info/index.json').decode('utf-8'))
@@ -345,7 +345,7 @@ def test_convert(testing_workdir, test_config):
         dirname = os.path.join('converted', platform)
         assert os.path.isdir(dirname)
         assert pkg_name in os.listdir(dirname)
-        test_config.subdir = platform
+        test_config.host_subdir = platform
         with TarCheck(os.path.join(dirname, pkg_name), config=test_config) as tar:
             tar.correct_subdir()
 

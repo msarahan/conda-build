@@ -456,7 +456,7 @@ def write_info_json(m):
 #
 # It can be used to create the runtime environment of this package using:
 # $ conda create --name <env> --file <this file>
-""" % (m.dist(), m.config.subdir))
+""" % (m.dist(), m.config.build_subdir))
             for dist in sorted(dists + [m.dist()]):
                 fo.write('%s\n' % '='.join(dist.split('::', 1)[-1].rsplit('-', 2)))
         if pin_depends == 'strict':
@@ -670,7 +670,7 @@ def bundle_conda(output, metadata, env, **kw):
     files = filter_files(files, prefix=metadata.config.host_prefix)
     output_folder = None
     if metadata.config.output_folder:
-        output_folder = os.path.join(metadata.config.output_folder, metadata.config.subdir)
+        output_folder = os.path.join(metadata.config.output_folder, metadata.config.host_subdir)
     final_output = os.path.join(output_folder or metadata.config.bldpkgs_dir, output_filename)
 
     # lock the output directory while we build this file
@@ -1045,9 +1045,7 @@ def test(recipedir_or_package_or_metadata, config, move_broken=True):
             info_dir = os.path.normpath(os.path.join(recipe_dir, 'info'))
             if os.path.isdir(info_dir):
                 with open(os.path.join(info_dir, 'index.json')) as f:
-                    config.subdir = json.load(f)['subdir']
-                if config.subdir != cc.subdir:
-                    config.has_separate_host_prefix = True
+                    config.host_subdir = json.load(f)['subdir']
             metadata_tuples = render_recipe(recipe_dir, config=config)
         except IOError:
             raise IOError("Didn't find recipe in folder or package under test.  Can't test this after exiting build.")

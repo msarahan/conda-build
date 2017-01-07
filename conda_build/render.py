@@ -110,7 +110,7 @@ def parse_or_try_download(metadata, no_download_source, config,
     for variant in variants:
         metadata = copy.deepcopy(metadata)
         if 'target_platform' in variant:
-            metadata.config.subdir = variant['target_platform']
+            metadata.config.host_subdir = variant['target_platform']
         try:
             metadata.parse_until_resolved(config=config, variant=variant)
             need_reparse_in_env = False

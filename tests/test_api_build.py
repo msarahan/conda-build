@@ -126,7 +126,7 @@ def test_git_describe_info_on_branch(test_config):
     recipe_path = os.path.join(metadata_dir, "_git_describe_number_branch")
     output = api.get_output_file_path(recipe_path)[0]
     _hash = api.render(recipe_path, config=test_config)[0][0]._hash_dependencies()
-    test_path = os.path.join(sys.prefix, "conda-bld", test_config.subdir,
+    test_path = os.path.join(sys.prefix, "conda-bld", test_config.host_subdir,
                              "git_describe_number_branch-1.20.2-{}_1_g82c6ba6.tar.bz2".format(_hash))
     assert test_path == output
 
@@ -166,7 +166,7 @@ def test_output_build_path_git_source(testing_workdir, test_config):
     recipe_path = os.path.join(metadata_dir, "source_git_jinja2")
     output = api.get_output_file_path(recipe_path, config=test_config)[0]
     _hash = api.render(recipe_path, config=test_config)[0][0]._hash_dependencies()
-    test_path = os.path.join(test_config.croot, test_config.subdir,
+    test_path = os.path.join(test_config.croot, test_config.host_subdir,
                              "conda-build-test-source-git-jinja2-1.20.2-py{}{}{}_0_g262d444.tar.bz2".format(
                                  sys.version_info.major, sys.version_info.minor, _hash))
     assert output == test_path
@@ -345,7 +345,7 @@ def test_skip_existing_url(test_metadata, testing_workdir, capfd):
 
     # Copy our package into some new folder
     output_dir = os.path.join(testing_workdir, 'someoutput')
-    platform = os.path.join(output_dir, test_metadata.config.subdir)
+    platform = os.path.join(output_dir, test_metadata.config.host_subdir)
     os.makedirs(platform)
     copy_into(outputs[0], os.path.join(platform, os.path.basename(outputs[0])))
 
@@ -782,7 +782,7 @@ def test_build_expands_wildcards(mocker, testing_workdir):
 def test_cross_compiler(testing_workdir, test_config):
     # TODO: testing purposes.  Package on @mingwandroid's channel.
     test_config.channel_urls = ('rdonnelly', )
-    test_config.debug = True
+    # test_config.debug = True
     recipe_dir = os.path.join(metadata_dir, '_cross_helloworld')
     output = api.build(recipe_dir, config=test_config)[0]
     assert output.startswith(os.path.join(test_config.croot, 'linux-imx351uc'))

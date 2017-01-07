@@ -112,6 +112,8 @@ class Config(object):
                   Setting('_prefix_length', DEFAULT_PREFIX_LENGTH),
                   Setting('locking', True),
                   Setting('max_env_retry', 1),
+                  Setting('_host_platform', None),
+                  Setting('_host_arch', None),
                   Setting('has_separate_host_prefix', False),
 
                   # variants
@@ -151,18 +153,45 @@ class Config(object):
             setattr(self, name, value)
 
     @property
-    def subdir(self):
+    def build_subdir(self):
         if self.platform == 'noarch' or self.noarch:
             return 'noarch'
         else:
-            return "-".join([self.platform, str(self.arch)])
+            return cc.subdir
 
-    @subdir.setter
-    def subdir(self, value):
+    @property
+    def host_arch(self):
+        return self._host_arch or self.arch
+
+    @host_arch.setter
+    def host_arch(self, value):
+        self._host_arch = value
+
+    @property
+    def host_platform(self):
+        return self._host_platform or self.platform
+
+    @host_platform.setter
+    def host_platform(self, value):
+        self._host_platform = value
+
+    @property
+    def host_subdir(self):
+        if self.platform == 'noarch' or self.noarch:
+            return 'noarch'
+        else:
+            return "-".join([self.host_platform, str(self.host_arch)])
+
+    @host_subdir.setter
+    def host_subdir(self, value):
         values = value.split('-')
-        self.platform = values[0]
+        self.host_platform = values[0]
         if len(values) > 1:
-            self.arch = values[1]
+            self.host_arch = values[1]
+
+    @property
+    def is_cross(self):
+        return self.build_subdir != self.host_subdir
 
     @property
     def croot(self):
@@ -357,7 +386,7 @@ class Config(object):
         if self.noarch:
             path = join(self.croot, "noarch")
         else:
-            path = join(self.croot, self.subdir)
+            path = join(self.croot, self.host_subdir)
         _ensure_dir(path)
         return path
 
@@ -366,7 +395,7 @@ class Config(object):
         """ Dirs where previous build packages might be. """
         # The first two *might* be the same, but might not, depending on if this is a cross-compile.
         #     cc.subdir should be the native platform, while self.subdir would be the host platform.
-        return {join(self.croot, self.subdir), join(self.croot, cc.subdir),
+        return {join(self.croot, self.host_subdir), join(self.croot, cc.subdir),
                 join(self.croot, "noarch"), }
 
     @property
@@ -449,7 +478,8 @@ def get_or_merge_config(config, **kwargs):
 def show(config):
     print('CONDA_PY:', config.CONDA_PY)
     print('CONDA_NPY:', config.CONDA_NPY)
-    print('subdir:', config.subdir)
+    print('build subdir:', config.build_subdir)
+    print('host subdir:', config.host_subdir)
     print('croot:', config.croot)
     print('build packages directory:', config.bldpkgs_dir)
 

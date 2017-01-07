@@ -803,7 +803,7 @@ def collect_channels(config, is_host=False):
         urls.extend(config.channel_urls)
     # defaults has a very limited set of repo urls.  Omit it from the URL list so
     #     that it doesn't fail.
-    if config.has_separate_host_prefix and is_host:
+    if config.is_cross and is_host:
         urls.remove('defaults')
         urls.remove('local')
     return urls
@@ -817,10 +817,10 @@ def get_build_index(config, clear_cache=True, omit_defaults=False):
         urls.insert(0, url_path(config.croot))
     try:
         index = get_index(channel_urls=urls,
-                        prepend=(not config.override_channels),
-                        use_local=False,
-                        use_cache=not clear_cache,
-                          platform=config.subdir)
+                          prepend=(not config.override_channels),
+                          use_local=False,
+                          use_cache=not clear_cache,
+                          platform=config.host_subdir)
     # HACK: defaults does not have the many subfolders we support.  Omit it and try again.
     except CondaHTTPError:
         urls.remove('defaults')
@@ -828,5 +828,5 @@ def get_build_index(config, clear_cache=True, omit_defaults=False):
                           prepend=config.override_channels,
                           use_local=False,
                           use_cache=not clear_cache,
-                          platform=config.subdir)
+                          platform=config.host_subdir)
     return index

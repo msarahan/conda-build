@@ -43,7 +43,7 @@ ARCH_MAP = {'32': 'x86',
 
 def ns_cfg(config):
     # Remember to update the docs of any of this changes
-    plat = config.subdir
+    plat = config.build_subdir
     py = config.CONDA_PY
     np = config.CONDA_NPY
     pl = config.CONDA_PERL
@@ -786,14 +786,15 @@ class MetaData(object):
         return d
 
     def info_index(self):
+        arch = self.config.host_arch or self.config.arch
         d = dict(
             name=self.name(),
             version=self.version(),
             build=self.build_id(),
             build_number=self.build_number() if self.build_number() else 0,
             platform=self.config.platform,
-            arch=ARCH_MAP.get(self.config.arch, self.config.arch),
-            subdir=self.config.subdir,
+            arch=ARCH_MAP.get(arch, arch),
+            subdir=self.config.host_subdir,
             depends=sorted(' '.join(ms.spec.split())
                              for ms in self.ms_depends()),
         )

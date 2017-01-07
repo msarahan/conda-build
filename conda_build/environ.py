@@ -261,7 +261,7 @@ def conda_build_vars(prefix, config):
         'BUILD_PREFIX': config.build_prefix,
         'SYS_PREFIX': sys.prefix,
         'SYS_PYTHON': sys.executable,
-        'SUBDIR': config.subdir,
+        'SUBDIR': config.host_subdir,
         'SRC_DIR': config.work_dir,
         'HTTPS_PROXY': os.getenv('HTTPS_PROXY', ''),
         'HTTP_PROXY': os.getenv('HTTP_PROXY', ''),
@@ -602,15 +602,14 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         capture = utils.capture
 
     # host or test envs should be using the host subdir, not the native one
-    if config.has_separate_host_prefix and os.path.basename(prefix)[:2] in ("_h", "_t"):
+    if config.is_cross and os.path.basename(prefix)[:2] in ("_h", "_t"):
         # feature added in conda 4.2.14.  Cross-compiling won't work with earlier versions.
         host_subdir_set = partial(utils.env_var, 'CONDA_SUBDIR',
-                                  config.subdir, callback=reset_context)
+                                  config.host_subdir, callback=reset_context)
 
         is_host = True
     else:
         host_subdir_set = contextlib.contextmanager(lambda: (yield))
-        pkgs_subdir_set = contextlib.contextmanager(lambda: (yield))
         is_host = False
 
     with capture():
@@ -636,7 +635,7 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                             cc.pkgs_dirs = cc.pkgs_dirs[:1]
                             locked_folders = (cc.pkgs_dirs + list(config.bldpkgs_dirs) +
                                               [os.path.join(cc.root_dir, 'conda-bld', arch)
-                                               for arch in ('noarch', config.subdir)])
+                                               for arch in ('noarch', config.host_subdir)])
                             locked_folders = set(locked_folders)
                             for folder in locked_folders:
                                 if not os.path.isdir(folder):
@@ -660,7 +659,6 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
 
                             with utils.ExitStack() as stack:
                                 stack.enter_context(host_subdir_set())
-                                stack.enter_context(pkgs_subdir_set())
                                 stack.enter_context(pip_set())
                                 stack.enter_context(utils.env_var('CONDA_CHANNELS',
                                                         ','.join(utils.collect_channels(config,
