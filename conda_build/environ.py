@@ -602,7 +602,9 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
         capture = utils.capture
 
     # host or test envs should be using the host subdir, not the native one
-    if config.is_cross and os.path.basename(prefix)[:2] in ("_h", "_t"):
+    env_prefix = os.path.basename(prefix)[:2]
+    if config.is_cross and ((config.has_separate_host_prefix and env_prefix == '_h') or
+                            env_prefix == "_t"):
         # feature added in conda 4.2.14.  Cross-compiling won't work with earlier versions.
         host_subdir_set = partial(utils.env_var, 'CONDA_SUBDIR',
                                   config.host_subdir, callback=reset_context)
