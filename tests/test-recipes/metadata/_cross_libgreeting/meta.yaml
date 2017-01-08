@@ -14,6 +14,6 @@ build:
     - env | sort
     - mkdir -p ${PREFIX}/lib || true
     - mkdir -p ${PREFIX}/include || true
-    - arm-unknown-linux-uclibcgnueabi-gcc -c ${LDFLAGS} ${CFLAGS} -o libgreeting.o libgreeting.c
-    - arm-unknown-linux-uclibcgnueabi-ar cru ${PREFIX}/lib/libgreeting.a libgreeting.o
+    - ${CC} -c ${LDFLAGS} ${CFLAGS} -o libgreeting.o libgreeting.c
+    - ${AR} cru ${PREFIX}/lib/libgreeting.a libgreeting.o
     - cp libgreeting.h ${PREFIX}/include
