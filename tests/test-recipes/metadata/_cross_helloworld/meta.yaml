@@ -14,7 +14,7 @@ requirements:
 
 build:
   script:
-    - arm-unknown-linux-uclibcgnueabi-gcc helloworld.c -I${PREFIX}/include -L${PREFIX}/lib -lgreeting -DGREETING_SUFFIX="$(xz --version | head -n 1)" -o ${PREFIX}/bin/helloworld
+    - ${CC} helloworld.c -I${PREFIX}/include -L${PREFIX}/lib -lgreeting -DGREETING_SUFFIX="$(xz --version | head -n 1)" -o ${PREFIX}/bin/helloworld
 
 test:
   commands:
