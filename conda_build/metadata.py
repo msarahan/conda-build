@@ -41,12 +41,19 @@ ARCH_MAP = {'32': 'x86',
             '64': 'x86_64'}
 
 
-def trim_empty_keys(dict_):
+def trim_empty_keys_mark(dict_, to_remove):
     for k, v in dict_.items():
         if hasattr(v, 'keys'):
-            trim_empty_keys(v)
+            trim_empty_keys_mark(v, to_remove)
         if not v:
-            del dict_[k]
+            to_remove.append(k)
+
+
+def trim_empty_keys(dict_):
+    to_remove = []
+    trim_empty_keys_mark(dict_, to_remove)
+    for k in to_remove:
+        del dict_[k]
 
 
 def ns_cfg(config):
