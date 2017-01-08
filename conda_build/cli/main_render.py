@@ -101,6 +101,14 @@ source to try fill in related template variables.",
         on clobbered fields.""",
         dest='clobber_sections_file',
     )
+    p.add_argument(
+        '-m', '--variant-config-files',
+        dest='variant_config_files',
+        action="append",
+        help="""Additional variant config files to add.  These yaml files can contain
+        keys such as `c_compiler` and `target_platform` to form a build matrix."""
+    )
+
     add_parser_channels(p)
     return p
 

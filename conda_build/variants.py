@@ -44,7 +44,7 @@ def find_config_files(metadata, additional_files=None, ignore_system_config=Fals
     if os.path.isfile(recipe_config):
         files.append(recipe_config)
     if additional_files:
-        files.extend(additional_files)
+        files.extend([os.path.expanduser(additional_file) for additional_file in additional_files])
     return files
 
 
