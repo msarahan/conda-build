@@ -46,7 +46,7 @@ from .conda_interface import text_type
 from .conda_interface import CrossPlatformStLink
 from .conda_interface import PathType, FileMode
 from .conda_interface import EntityEncoder
-from .conda_interface import conda_main
+from .conda_interface import conda_main, reset_context
 
 from conda_build import __version__
 from conda_build import environ, source, tarcheck, utils
@@ -188,10 +188,10 @@ def get_run_dists(m):
     return sorted(linked(prefix))
 
 
-def get_deps(m, machine, prefix):
+def get_deps(m, type_, prefix):
     # we only care if we actually have deps.  Otherwise, the environment will not be
     #    valid for inspection.
-    if m.meta.get('requirements') and m.meta['requirements'].get(machine):
+    if glob(os.path.join(prefix, 'conda-meta', '*')):
         return environ.Environment(prefix).package_specs()
     return []
 
@@ -227,6 +227,7 @@ def finalize_metadata(m):
         elif ('git_url' in m.meta['source'] and not os.path.isabs(m.meta['source']['git_url'])):
             rendered_metadata.meta['source']['git_url'] = os.path.normpath(
                 os.path.join(m.path, m.meta['source']['git_url']))
+
     return rendered_metadata
 
 def copy_recipe(m):
@@ -506,32 +507,33 @@ def create_info_files(m, files, prefix):
         # make sure we use '/' path separators in metadata
         files = [_f.replace('\\', '/') for _f in files]
 
-    copy_recipe(m)
-    copy_readme(m)
-    copy_license(m)
+    final = finalize_metadata(m)
+    copy_recipe(final)
+    copy_readme(final)
+    copy_license(final)
 
-    write_hash_input(m)
-    write_info_json(m)  # actually index.json
-    write_about_json(m)
-    write_package_metadata_json(m)
+    write_hash_input(final)
+    write_info_json(final)  # actually index.json
+    write_about_json(final)
+    write_package_metadata_json(final)
 
-    write_info_files_file(m, files)
+    write_info_files_file(final, files)
 
-    files_with_prefix = get_files_with_prefix(m, files, prefix)
-    create_info_files_json_v1(m, m.config.info_dir, prefix, files, files_with_prefix)
+    files_with_prefix = get_files_with_prefix(final, files, prefix)
+    create_info_files_json_v1(m, final.config.info_dir, prefix, files, files_with_prefix)
 
-    detect_and_record_prefix_files(m, files, prefix)
-    write_no_link(m, files)
+    detect_and_record_prefix_files(final, files, prefix)
+    write_no_link(final, files)
 
-    if m.get_value('source/git_url'):
-        with io.open(join(m.config.info_dir, 'git'), 'w', encoding='utf-8') as fo:
-            source.git_info(m.config, fo)
+    if final.get_value('source/git_url'):
+        with io.open(join(final.config.info_dir, 'git'), 'w', encoding='utf-8') as fo:
+            source.git_info(final.config, fo)
 
-    if m.get_value('app/icon'):
-        utils.copy_into(join(m.path, m.get_value('app/icon')),
-                        join(m.config.info_dir, 'icon.png'),
-                        m.config.timeout, locking=m.config.locking)
-    return [f.replace(m.config.host_prefix + '/', '') for root, _, _ in os.walk(m.config.info_dir)
+    if final.get_value('app/icon'):
+        utils.copy_into(join(final.path, m.get_value('app/icon')),
+                        join(final.config.info_dir, 'icon.png'),
+                        final.config.timeout, locking=final.config.locking)
+    return [f.replace(final.config.host_prefix + '/', '') for root, _, _ in os.walk(final.config.info_dir)
             for f in glob(os.path.join(root, '*'))]
 
 
@@ -660,8 +662,9 @@ def bundle_conda(output, metadata, env, **kw):
     tmp_metadata.meta['package']['name'] = output['name']
     tmp_metadata.meta['requirements'] = {'run': output.get('requirements', [])}
 
+    final_metadata = finalize_metadata(tmp_metadata)
     output_filename = ('-'.join([output['name'], metadata.version(),
-                                 tmp_metadata.build_id()]) + '.tar.bz2')
+                                 final_metadata.build_id()]) + '.tar.bz2')
     files = list(set(utils.expand_globs(files, metadata.config.host_prefix)))
     info_files = create_info_files(tmp_metadata, files, prefix=metadata.config.host_prefix)
     for f in info_files:
@@ -754,16 +757,11 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
     if env_path_backup_var_exists:
         env["CONDA_PATH_BACKUP"] = os.environ["CONDA_PATH_BACKUP"]
 
-    if m.config.skip_existing:
-        package_exists = is_package_built(m)
-        if package_exists:
-            print(m.dist(), "is already built in {0}, skipping.".format(package_exists))
-            return []
+
 
     built_packages = []
 
     if post in [False, None]:
-        print("BUILD START:", m.dist())
         if m.uses_jinja and (need_source_download or need_reparse_in_env):
             print("    (actual version deferred until further download or env creation)")
 
@@ -792,6 +790,16 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
 
         environ.create_env(m.config.build_prefix, specs, config=m.config)
 
+        final_metadata = finalize_metadata(m)
+
+        if m.config.skip_existing:
+            package_exists = is_package_built(final_metadata)
+            if package_exists:
+                print(final_metadata.dist(), "is already built in {0}, skipping.".format(package_exists))
+                return []
+
+        print("BUILD START:", final_metadata.dist())
+
         if m.config.has_separate_host_prefix:
             if VersionOrder(conda.__version__) < VersionOrder('4.3.2'):
                 raise RuntimeError("Non-native subdir support only in conda >= 4.3.2")
@@ -811,8 +819,6 @@ def build(m, post=None, need_source_download=True, need_reparse_in_env=False):
         elif need_reparse_in_env:
             reparse(m)
             print("BUILD START (revised):", finalize_metadata(m).dist())
-
-        print("Package:", finalize_metadata(m).dist())
 
         # get_dir here might be just work, or it might be one level deeper,
         #    dependening on the source.
@@ -1455,20 +1461,32 @@ def is_package_built(metadata):
     for d in metadata.config.bldpkgs_dirs:
         if not os.path.isdir(d):
             os.makedirs(d)
-        update_index(d, config, could_be_mirror=False)
+        update_index(d, metadata.config, could_be_mirror=False)
 
-    with env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(config))):
+    # look at actual versions of packages in build env to get hash that matches output package
+    final= finalize_metadata(metadata)
+    package_spec = '='.join((final.name(), final.version(), final.build_id()))
+
+    #with utils.capture():
+    with utils.env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(metadata.config,
+                                                                        is_host=False)),
+                    callback=reset_context):
         try:
-            utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
+            utils._check_call('conda create -n conda_build_test_env --dry-run {}'.format(package_spec).split())
             built = True
+        # Defaults has a limited subset of any arbitrary subdirs, which can break conda.  Omit it.
         except (CondaHTTPError, SystemExit):
             # retry, omitting defaults
-            with env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(config, is_host=True))):
+            with utils.env_var('CONDA_CHANNELS', ','.join(utils.collect_channels(metadata.config,
+                                                                                is_host=True)),
+                            callback=reset_context):
                 try:
-                    utils._check_call('conda install --dry-run {}'.format(metadata.dist()).split())
+                    utils._check_call('conda create -n conda_build_test_env --dry-run {}'.format(package_spec).split())
                     built = True
                 except (CondaHTTPError, SystemExit):
                     built = False
+    if built:
+        built = bldpkg_path(final)
     return built
 
 

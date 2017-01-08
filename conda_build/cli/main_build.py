@@ -256,7 +256,7 @@ def execute(args):
     build.check_external()
 
     # change globals in build module, see comment there as well
-    channel_urls = args.channel or ()
+    channel_urls = args.__dict__.get('channel') or args.__dict__.get('channels') or ()
     config.channel_urls = []
 
     for url in channel_urls:

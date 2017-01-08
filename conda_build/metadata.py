@@ -41,6 +41,14 @@ ARCH_MAP = {'32': 'x86',
             '64': 'x86_64'}
 
 
+def trim_empty_keys(dict_):
+    for k, v in dict_.items():
+        if hasattr(v, 'keys'):
+            trim_empty_keys(v)
+        if not v:
+            del dict_[k]
+
+
 def ns_cfg(config):
     # Remember to update the docs of any of this changes
     plat = config.build_subdir
@@ -731,6 +739,7 @@ class MetaData(object):
         for key in 'build', 'run':
             if key in composite['requirements'] and not composite['requirements'].get(key):
                 del composite['requirements'][key]
+        trim_empty_keys(composite)
         return composite
 
     def _hash_dependencies(self):
@@ -741,7 +750,10 @@ class MetaData(object):
 
         # save only the first HASH_LENGTH characters - should be more than enough, since these only
         #    need to be unique within one version
-        return 'h' + str(abs(hash(self._get_hash_dictionary())))[:HASH_LENGTH]
+        # plus one is for the h - zero pad on the front, trim to match HASH_LENGTH
+        hash_ = 'h{hash_:0{length}d}'.format(length=HASH_LENGTH,
+                                hash_=abs(hash(self._get_hash_dictionary())))[:HASH_LENGTH + 1]
+        return hash_
 
     def build_id(self):
         out = self.get_value('build/string')
@@ -758,6 +770,8 @@ class MetaData(object):
                 out = ret[0] + self._hash_dependencies()
             if len(ret) > 1:
                 out = '_'.join([out] + ret[1:])
+        else:
+            out = re.sub('h[0-9]{%s}' % HASH_LENGTH, self._hash_dependencies(), out)
         return out
 
     def dist(self):

@@ -674,7 +674,6 @@ def create_env(prefix, specs, config, clear_cache=True, retry=0):
                                     prefix=prefix, specs=" ".join(specs)).split()
                                 if config.debug:
                                     cmd.insert(1, '--debug')
-                                reset_context()
                                 conda_main(*cmd)
 
                     except (SystemExit, PaddingError, LinkError) as exc:
