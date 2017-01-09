@@ -432,7 +432,14 @@ def linux_vars(compiler_vars, prefix, config):
     if config.arch == 32:
         compiler_vars['CFLAGS'] += ' -m32'
         compiler_vars['CXXFLAGS'] += ' -m32'
-    return {}
+    return {
+        # There is also QEMU_SET_ENV, but that needs to be
+        # filtered so it only contains the result of `linux_vars`
+        # which, before this change was empty, and after it only
+        # contains other QEMU env vars.
+        'QEMU_LD_PREFIX': os.getenv('QEMU_LD_PREFIX'),
+        'QEMU_UNAME': os.getenv('QEMU_UNAME'),
+    }
 
 
 def system_vars(env_dict, prefix, config):
