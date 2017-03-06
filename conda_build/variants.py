@@ -134,6 +134,7 @@ def set_language_env_vars(variant):
 
 def all_unique(_list):
     seen = set()
+    item = None
     unique = not any(item in seen or seen.add(item) for _set in _list for item in _set)
     return unique or item
 
@@ -162,7 +163,7 @@ def _get_zip_key_set(combined_variant):
             # make sure that each key only occurs in one set
             key_sets = [set(group) for group in zip_keys]
             _all_unique = all_unique(key_sets)
-            if _all_unique != True:
+            if _all_unique is not True:
                 raise ValueError("All package in zip keys must belong to only one group.  "
                                 "'{}' is in more than one group.".format(_all_unique))
             for ks in key_sets:
@@ -248,7 +249,7 @@ def dict_of_lists_to_list_of_dicts(dict_or_list_of_dicts):
     return dicts
 
 
-def get_package_variants(recipedir_or_metadata, config=None):
+def get_package_variants(recipedir_or_metadata, config=None, variants_dict=None):
     if hasattr(recipedir_or_metadata, 'config'):
         config = recipedir_or_metadata.config
     files = find_config_files(recipedir_or_metadata, ensure_list(config.variant_config_files),
@@ -257,11 +258,13 @@ def get_package_variants(recipedir_or_metadata, config=None):
     specs = get_default_variants() + [parse_config_file(f) for f in files]
 
     # this is the override of the variants from files and args with values from CLI or env vars
+    extra_specs = []
     if config.variant:
-        combined_spec, extend_keys = combine_specs(specs + [config.variant])
-    else:
-        # this tweaks behavior from clobbering to appending/extending
-        combined_spec, extend_keys = combine_specs(specs)
+        extra_specs.append(config.variant)
+    if variants_dict:
+        extra_specs.append(variants_dict)
+
+    combined_spec, extend_keys = combine_specs(specs + extra_specs)
 
     # clobber the variant with anything in the config (stuff set via CLI flags or env vars)
     for k, v in config.variant.items():

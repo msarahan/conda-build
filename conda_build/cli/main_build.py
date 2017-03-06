@@ -7,6 +7,7 @@
 from __future__ import absolute_import, division, print_function
 
 import argparse
+import json
 import logging
 import os
 import sys
@@ -21,6 +22,7 @@ from conda_build.conda_interface import cc, add_parser_channels, url_path
 import conda_build.source as source
 from conda_build.utils import LoggingContext
 from conda_build.config import Config
+from conda_build.variants import get_package_variants
 
 on_win = (sys.platform == 'win32')
 
@@ -232,25 +234,25 @@ different sets of packages."""
     return p, args
 
 
-def output_action(recipe, config):
+def output_action(recipe, config, variants):
     with LoggingContext(logging.CRITICAL + 1):
-        metadata_tuples = api.render(recipe, config=config)
+        metadata_tuples = api.render(recipe, config=config, variants=variants)
         paths = api.get_output_file_path(metadata_tuples)
         print('\n'.join(paths))
 
 
-def source_action(recipe, config):
-    metadata = api.render(recipe, config=config)[0][0]
+def source_action(recipe, config, variants):
+    metadata = api.render(recipe, config=config, variants=variants)[0][0]
     source.provide(metadata)
     print('Source tree in:', metadata.config.work_dir)
 
 
-def test_action(recipe, config):
+def test_action(recipe, config, **kwargs):
     return api.test(recipe, move_broken=False, config=config)
 
 
-def check_action(recipe, config):
-    return api.check(recipe, config=config)
+def check_action(recipe, config, variants):
+    return api.check(recipe, config=config, variants=variants)
 
 
 def execute(args):
@@ -297,12 +299,16 @@ def execute(args):
     elif args.check:
         action = check_action
 
-    if action:
-        outputs = [action(recipe, config) for recipe in args.recipe]
-    else:
-        outputs = api.build(args.recipe, post=args.post, build_only=args.build_only,
-                            notest=args.notest, already_built=None, config=config,
-                            noverify=args.no_verify)
+    outputs = []
+    for recipe in args.recipe:
+        variants_dict = json.loads(args.variants) if args.variants else None
+        variants = get_package_variants(recipe, config, variants_dict=variants_dict)
+        if action:
+            outputs.append(action(recipe, config, variants))
+        else:
+            outputs.extend(api.build(args.recipe, post=args.post, build_only=args.build_only,
+                                     notest=args.notest, already_built=None, config=config,
+                                     noverify=args.no_verify, variants=variants))
 
     if not args.output and len(utils.get_build_folders(config.croot)) > 0:
         build.print_build_intermediate_warning(config)

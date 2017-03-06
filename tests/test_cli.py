@@ -11,15 +11,17 @@ import yaml
 
 from distutils.version import LooseVersion
 import pytest
+from mock import ANY
 
 import conda
 from conda_build.conda_interface import download
 from conda_build.tarcheck import TarCheck
 
 from conda_build import api
+from conda_build.conda_interface import TemporaryDirectory
 from conda_build.utils import (get_site_packages, on_win, get_build_folders, package_has_file,
                                check_call_env)
-from conda_build.conda_interface import TemporaryDirectory
+from conda_build.variants import get_default_variants
 from .utils import metadata_dir, put_bad_conda_on_path
 
 import conda_build.cli.main_build as main_build
@@ -431,3 +433,49 @@ def test_purge_all(testing_metadata):
     main_build.execute(args)
     assert not get_build_folders(testing_metadata.config.croot)
     assert not any(os.path.isfile(fn) for fn in outputs)
+
+
+def test_build_with_variant(mocker, testing_metadata, testing_workdir):
+    api.output_yaml(testing_metadata, 'meta.yaml')
+    output_action = mocker.patch.object(main_build, 'output_action')
+    source_action = mocker.patch.object(main_build, 'source_action')
+    check_action = mocker.patch.object(main_build, 'check_action')
+    api_build = mocker.patch.object(main_build.api, 'build')
+    default_variant = get_default_variants()[0]
+    v1 = default_variant.copy()
+    v1['testvar'] = 'abc'
+    v2 = default_variant.copy()
+    v2['testvar'] = '123'
+    expected_variants = [v1, v2]
+
+    args = [testing_workdir, '--variants', '{"testvar": ["abc", "123"]}']
+    main_build.execute(args)
+    assert api_build.called_once_with(testing_workdir, post=None, build_only=False, notest=False,
+                                      already_built=None, config=ANY, variants=expected_variants)
+    output_args = args + ['--output']
+    main_build.execute(output_args)
+    assert output_action.called_once_with(testing_workdir, config=ANY, variants=expected_variants)
+
+    source_args = args + ['--source']
+    main_build.execute(source_args)
+    assert source_action.called_once_with(testing_workdir, config=ANY, variants=expected_variants)
+
+    check_args = args + ['--check']
+    main_build.execute(check_args)
+    assert check_action.called_once_with(testing_workdir, config=ANY, variants=expected_variants)
+
+
+def test_render_with_variant(mocker, testing_metadata, testing_workdir):
+    api.output_yaml(testing_metadata, 'meta.yaml')
+    api_render = mocker.patch.object(main_build.api, 'render')
+    default_variant = get_default_variants()[0]
+    v1 = default_variant.copy()
+    v1['testvar'] = 'abc'
+    v2 = default_variant.copy()
+    v2['testvar'] = '123'
+    expected_variants = [v1, v2]
+
+    args = [testing_workdir, '--variants', '{"testvar": ["abc", "123"]}']
+    main_render.execute(args)
+    assert api_render.called_once_with(testing_workdir, config=ANY, no_download_source=False,
+                                       variants=expected_variants)

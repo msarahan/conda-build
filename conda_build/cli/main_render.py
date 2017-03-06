@@ -6,6 +6,7 @@
 
 from __future__ import absolute_import, division, print_function
 
+import json
 import logging
 import sys
 
@@ -15,7 +16,7 @@ from conda_build import __version__, api
 from conda_build.completers import RecipeCompleter
 
 from conda_build.config import get_or_merge_config
-from conda_build.variants import get_package_variants, set_language_env_vars
+from conda_build.variants import get_package_variants
 from conda_build.utils import LoggingContext
 
 on_win = (sys.platform == 'win32')
@@ -100,6 +101,11 @@ source to try fill in related template variables.",
         help="""Additional variant config files to add.  These yaml files can contain
         keys such as `c_compiler` and `target_platform` to form a build matrix."""
     )
+    p.add_argument(
+        '--variants',
+        help="""Variants input, in JSON format.  ex: '{"python": ["2.7", "3.5"],
+        "numpy": ["1.11", "1.12"]}'"""
+    )
 
     add_parser_channels(p)
     return p
@@ -133,11 +139,11 @@ def execute(args):
     p, args = parse_args(args)
 
     config = get_or_merge_config(None, **args.__dict__)
-    variants = get_package_variants(args.recipe, config)
-    set_language_env_vars(variants)
+    variants_dict = json.loads(args.variants) if args.variants else None
+    variants = get_package_variants(args.recipe, config, variants_dict=variants_dict)
 
     metadata_tuples = api.render(args.recipe, config=config,
-                                 no_download_source=args.no_source)
+                                 no_download_source=args.no_source, variants=variants)
     if args.output:
         with LoggingContext(logging.CRITICAL + 1):
             paths = api.get_output_file_path(metadata_tuples)
