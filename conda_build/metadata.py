@@ -9,6 +9,7 @@ from os.path import isfile, join
 import re
 import six
 import sys
+import time
 
 from .conda_interface import iteritems, PY3, text_type
 from .conda_interface import md5_file
@@ -924,6 +925,7 @@ class MetaData(object):
             version=self.version(),
             build=self.build_id(),
             build_number=self.build_number() if self.build_number() else 0,
+            timestamp=int((time.time() + 0.5) * 1000),
             platform=self.config.platform if self.config.platform != 'noarch' else None,
             arch=ARCH_MAP.get(arch, arch),
             subdir=self.config.host_subdir,
