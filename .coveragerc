@@ -1,4 +1,7 @@
 [run]
 include=conda_build/*
 parallel=True
-omit=conda_build/skeletons/_example_skeleton.py
+omit =
+    conda_build/skeletons/_example_skeleton.py
+    conda_build/_version.py
+    conda_build/_link.py

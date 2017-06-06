@@ -45,10 +45,7 @@ def bldpkg_path(m):
 
 def actions_to_pins(actions):
     specs = []
-    if utils.conda_43():
-        spec_name = lambda x: x.dist_name
-    else:
-        spec_name = lambda x: x
+    spec_name = lambda x: x.dist_name
     if 'LINK' in actions:
         specs = [' '.join(spec_name(spec).split()[0].rsplit('-', 2)) for spec in actions['LINK']]
     return specs
