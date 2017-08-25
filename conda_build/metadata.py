@@ -63,7 +63,7 @@ def ns_cfg(config):
         x86_64=plat.endswith('-64'),
         os=os,
         environ=os.environ,
-        nomkl=bool(int(os.environ.get('FEATURE_NOMKL', False)))
+        nomkl=os.environ.get('FEATURE_NOMKL', config.variant.get('blas_impl') != 'mkl'),
     )
 
     defaults = variants.get_default_variants()[0]
