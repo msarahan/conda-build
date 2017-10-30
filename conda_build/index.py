@@ -267,6 +267,7 @@ def update_subdir_index(dir_path, force=False, check_md5=False, remove=True, loc
                 'subdir': subdir,
             },
         }
+        _patch_repodata(index, subdir)
         _write_repodata(repodata, dir_path, lock=lock, locking=locking, timeout=timeout)
 
         if channel_name:
@@ -489,3 +490,54 @@ def _make_subdir_index_html(channel_name, subdir, repodata, extra_paths):
         extra_paths=extra_paths,
     )
     return rendered_html
+
+
+def _extract_and_remove_vc_feature(record):
+    features = record.get('features', '').split()
+    vc_features = tuple(f for f in features if f.startswith('vc'))
+    if not vc_features:
+        return None
+    non_vc_features = tuple(f for f in features if f not in vc_features)
+    vc_version = int(vc_features[0][2:])  # throw away all but the first
+    if non_vc_features:
+        record['features'] = ' '.join(non_vc_features)
+    else:
+        del record['features']
+    return vc_version
+
+
+def _patch_repodata(index, subdir):
+    if subdir.startswith("win-"):
+        for fn, record in index.items():
+            if record['name'] == 'python':
+                record.pop('track_features', None)
+                if not any(d.startswith('vc') for d in record['depends']):
+                    dep = {
+                        '2.6': 'vc 9.*',
+                        '2.7': 'vc 9.*',
+                        '3.3': 'vc 10.*',
+                        '3.4': 'vc 10.*',
+                        '3.5': 'vc 14.*',
+                        '3.6': 'vc 14.*',
+                        '3.7': 'vc 14.*',
+                    }[record['version'][:3]]
+                    record['depends'].append(dep)
+            elif record['name'] == "vs2015_win-64":
+                record.pop('track_features', None)
+            elif record['name'] == "yasm":
+                vc_version = _extract_and_remove_vc_feature(record)
+                if vc_version is not None:
+                    dep = {
+                        9: 'vs2008_runtime',
+                        10: 'vs2010_runtime',
+                        14: 'vs2015_runtime',
+                    }[vc_version]
+                    if dep not in record['depends']:
+                        record['depends'].append(dep)
+            elif record['name'] == "git":
+                record['depends'] = [dep for dep in record['depends']
+                                     if not dep.startswith('vc ')]
+            elif 'vc' in record.get('features', ''):
+                vc_version = _extract_and_remove_vc_feature(record)
+                if not any(d.startswith('vc') for d in record['depends']):
+                    record['depends'].append('vc %d.*' % vc_version)
