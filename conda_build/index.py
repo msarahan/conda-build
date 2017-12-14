@@ -507,6 +507,11 @@ def _extract_and_remove_vc_feature(record):
 
 
 def _patch_repodata(index, subdir):
+    # This patch requested by Stan
+    numbas = (fn for fn in index if fn.startswith("numba-0.36.1"))
+    for fn in numbas:
+        index[fn]['timestamp'] = 1512604800000
+
     if subdir.startswith("win-"):
         for fn, record in index.items():
             if record['name'] == 'python':
