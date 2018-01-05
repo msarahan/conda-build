@@ -546,21 +546,3 @@ def _patch_repodata(index, subdir):
                 vc_version = _extract_and_remove_vc_feature(record)
                 if not any(d.startswith('vc') for d in record['depends']):
                     record['depends'].append('vc %d.*' % vc_version)
-
-    for fn, record in index.items():
-        if record['name'] == 'scikit-image':
-            # do not modify requirements of 0.13.1+
-            if VersionOrder(record['version']) >= VersionOrder('0.13.1'):
-                continue
-            try:
-                idx = record['depends'].index("networkx >=1.8")
-            except ValueError:
-                pass
-            else:
-                record['depends'][idx] = "networkx >=1.8,<2.0"
-            try:
-                idx = record['depends'].index("networkx")
-            except ValueError:
-                pass
-            else:
-                record['depends'][idx] = "networkx <2.0"
