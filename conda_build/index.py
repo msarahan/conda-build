@@ -549,9 +549,6 @@ def _patch_repodata(index, subdir):
 
     for fn, record in index.items():
         if record['name'] == 'scikit-image':
-            # do not modify requirements of 0.13.1+
-            if VersionOrder(record['version']) >= VersionOrder('0.13.1'):
-                continue
             try:
                 idx = record['depends'].index("networkx >=1.8")
             except ValueError:
