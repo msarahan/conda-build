@@ -292,6 +292,7 @@ def _read_index_tar(tar_path, lock, locking=True, timeout=90):
                 # add unsatisfiable dependency to revoked packages
                 if isfile(tar_path + '.REVOKED'):
                     index_json['depends'].append('package_has_been_revoked')
+                    index_json['revoked'] = True
             except EOFError:
                 raise RuntimeError("Could not extract %s. File probably corrupt."
                     % tar_path)
