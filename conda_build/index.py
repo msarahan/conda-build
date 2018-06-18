@@ -211,12 +211,17 @@ def update_subdir_index(dir_path, force=False, check_md5=False, remove=True, loc
         files = tuple(basename(path) for path in glob(join(dir_path, '*.tar.bz2')))
         for fn in files:
             path = join(dir_path, fn)
+            is_revoked = isfile(path + '.REVOKED')
             if fn in index:
-                if check_md5:
-                    if index[fn]['md5'] == md5_file(path):
+                revoked_in_index = index[fn].get('revoked', False)
+                revoked_status_correct = (is_revoked == revoked_in_index)
+                # always index the package when the revoked status is incorrect
+                if revoked_status_correct:
+                    if check_md5:
+                        if index[fn]['md5'] == md5_file(path):
+                            continue
+                    elif index[fn]['mtime'] == getmtime(path):
                         continue
-                elif index[fn]['mtime'] == getmtime(path):
-                    continue
             if verbose:
                 print('updating:', fn)
             index_json, about_json, paths_json, recipe_json = _read_index_tar(
@@ -289,6 +294,10 @@ def _read_index_tar(tar_path, lock, locking=True, timeout=90):
         with tarfile.open(tar_path) as t:
             try:
                 index_json = json.loads(t.extractfile('info/index.json').read().decode('utf-8'))
+                if isfile(tar_path + '.REVOKED'):
+                    # add unsatisfiable dependency to revoked packages
+                    index_json['depends'].append('package_has_been_revoked')
+                    index_json['revoked'] = True
             except EOFError:
                 raise RuntimeError("Could not extract %s. File probably corrupt."
                     % tar_path)
