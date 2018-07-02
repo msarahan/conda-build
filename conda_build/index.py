@@ -555,3 +555,8 @@ def _patch_repodata(index, subdir):
                 vc_version = _extract_and_remove_vc_feature(record)
                 if not any(d.startswith('vc') for d in record['depends']):
                     record['depends'].append('vc %d.*' % vc_version)
+
+    for fn, record in iteritems(index):
+        if record['name'] == 'conda-env':
+            if not any(d.startswith('python') for d in record['depends']):
+                record['namespace'] = 'python'
