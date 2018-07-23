@@ -130,8 +130,8 @@ def _get_default_settings():
 
             # append/clobber metadata section data (for global usage.  Can also add files to
             #    recipe.)
-            Setting('append_sections_file', None),
-            Setting('clobber_sections_file', None),
+            Setting('append_sections_file', cc_conda_build.get('append_sections_file')),
+            Setting('clobber_sections_file', cc_conda_build.get('clobber_sections_file')),
             Setting('bootstrap', None),
 
             # source provisioning.
