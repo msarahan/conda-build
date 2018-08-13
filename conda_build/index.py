@@ -15,6 +15,7 @@ import logging
 from numbers import Number
 import os
 from os.path import basename, dirname, getmtime, getsize, isdir, isfile, join
+import re
 from shutil import copy2
 import tarfile
 
@@ -521,8 +522,10 @@ def _patch_repodata(index, subdir):
     for fn in numbas:
         index[fn]['timestamp'] = 1512604800000
 
-    if subdir.startswith("win-"):
-        for fn, record in index.items():
+    linux_runtime_re = re.compile(r"lib(\w+)-ng\s(?:>=)?([\d\.]+\d)(?:$|\.\*)")
+
+    for fn, record in index.items():
+        if subdir.startswith("win-"):
             if record['name'] == 'python':
                 record.pop('track_features', None)
                 if not any(d.startswith('vc') for d in record['depends']):
@@ -555,8 +558,23 @@ def _patch_repodata(index, subdir):
                 vc_version = _extract_and_remove_vc_feature(record)
                 if not any(d.startswith('vc') for d in record['depends']):
                     record['depends'].append('vc %d.*' % vc_version)
+        elif subdir.startswith("linux-"):
+            if any(dep.split()[0] in ("libgcc-ng", "libstdcxx-ng", "libgfortran-ng")
+                        for dep in record.get('depends', [])):
+                deps = []
+                for dep in record['depends']:
+                    match = linux_runtime_re.match(dep)
+                    if match:
+                        dep = "lib{}-ng >={}".format(match.group(1), match.group(2))
+                        if match.group(1) == "gfortran":
+                            # this is adding an upper bound
+                            lower_bound = int(match.group(2)[0])
+                            # ABI break at gfortran 8
+                            if lower_bound < 8:
+                                dep += ",<8.0a0"
+                    deps.append(dep)
+                record['depends'] = deps
 
-    for fn, record in index.items():
         if record['name'] == 'conda-env':
             if not any(d.startswith('python') for d in record['depends']):
                 record['namespace'] = 'python'
