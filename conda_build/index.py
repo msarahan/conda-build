@@ -578,3 +578,9 @@ def _patch_repodata(index, subdir):
         if record['name'] == 'conda-env':
             if not any(d.startswith('python') for d in record['depends']):
                 record['namespace'] = 'python'
+        if record['name'] == 'openblas-devel':
+            if not any(d.startswith('blas') for d in record['depends']):
+                record['depends'].append("blas * openblas")
+        if record['name'] == 'mkl-devel':
+            if not any(d.startswith('blas') for d in record['depends']):
+                record['depends'].append("blas * mkl")
