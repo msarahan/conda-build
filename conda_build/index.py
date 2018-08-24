@@ -584,3 +584,12 @@ def _patch_repodata(index, subdir):
         if record['name'] == 'mkl-devel':
             if not any(d.startswith('blas') for d in record['depends']):
                 record['depends'].append("blas * mkl")
+
+        if "features" in record:
+            if "nomkl" == record["features"]:
+                del record['features']
+                record['depends'].append("nomkl")
+            elif "nomkl" in record["features"]:
+                # remove nomkl feature
+                record['features'].remove('nomkl')
+                record['depends'].append("nomkl")
