@@ -586,10 +586,9 @@ def _patch_repodata(index, subdir):
                 record['depends'].append("blas * mkl")
 
         if record['name'] == 'nomkl':
-            if "blas * openblas" not in record['depends']:
-                record['depends'].append("blas * openblas")
-            if 'features' in record:
-                del record['features']
+            record['depends'] = ["blas * openblas"]
+            if 'track_features' in record:
+                del record['track_features']
 
         if "features" in record:
             if "nomkl" == record["features"]:
