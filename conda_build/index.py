@@ -590,6 +590,11 @@ def _patch_repodata(index, subdir):
             if 'track_features' in record:
                 del record['track_features']
 
+        if (record['name'] == 'numpy' and
+                any(dep.split()[0] == 'mkl' for dep in record['depends']) and
+                "blas * mkl" not in record['depends']):
+            record['depends'].append("blas * mkl")
+
         if "features" in record:
             if "nomkl" == record["features"]:
                 del record['features']
