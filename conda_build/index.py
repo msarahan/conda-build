@@ -585,7 +585,7 @@ def _patch_repodata(index, subdir):
             if not any(d.startswith('blas') for d in record['depends']):
                 record['depends'].append("blas * mkl")
 
-        if record['name'] == 'nomkl':
+        if record['name'] == 'nomkl' and not subdir.startswith("win-"):
             record['depends'] = ["blas * openblas"]
             if 'track_features' in record:
                 del record['track_features']
