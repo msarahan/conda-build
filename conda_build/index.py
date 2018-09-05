@@ -34,6 +34,8 @@ cached_index = None
 local_subdir = ""
 cached_channels = []
 
+BLAS_USING_PKGS = {"numpy", "scipy", "numexpr", "scikit-learn"}
+
 
 def get_build_index(subdir, bldpkgs_dir, output_folder=None, clear_cache=False,
                     omit_defaults=False, channel_urls=None, debug=False, verbose=True,
@@ -590,9 +592,9 @@ def _patch_repodata(index, subdir):
             if 'track_features' in record:
                 del record['track_features']
 
-        if (record['name'] == 'numpy' and
+        if (record['name'] in BLAS_USING_PKGS and
                 any(dep.split()[0] == 'mkl' for dep in record['depends']) and
-                "blas * mkl" not in record['depends']):
+                not any(dep.split()[0] == "blas" for dep in record['depends'])):
             record['depends'].append("blas * mkl")
 
         if "features" in record:
