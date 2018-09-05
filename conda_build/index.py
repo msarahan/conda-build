@@ -34,7 +34,7 @@ cached_index = None
 local_subdir = ""
 cached_channels = []
 
-BLAS_USING_PKGS = {"numpy", "scipy", "numexpr", "scikit-learn"}
+BLAS_USING_PKGS = {"numpy", "numpy-base", "scipy", "numexpr", "scikit-learn"}
 
 
 def get_build_index(subdir, bldpkgs_dir, output_folder=None, clear_cache=False,
