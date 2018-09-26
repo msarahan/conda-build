@@ -916,8 +916,12 @@ class ChannelIndex(object):
             #     new_repodata_packages = {fn: old_repodata_packages[fn] for fn in unchanged_set}
             # else:
             # For the unchanged_set, read up the cached index.json files in subdir/.cache/index
-            new_repodata_packages = {fn: self._load_index_from_cache(subdir, fn, stat_cache)
-                                     for fn in unchanged_set}
+            new_repodata_packages = {}
+            for fn in unchanged_set:
+                try:
+                    new_repodata_packages[fn] = self._load_index_from_cache(subdir, fn, stat_cache)
+                except IOError:
+                    update_set.add(fn)
 
             # Invalidate cached files for update_set.
             # Extract and cache update_set and add_set, then add to new_repodata_packages.
@@ -1015,6 +1019,9 @@ class ChannelIndex(object):
         except (tarfile.ReadError, EOFError):
             log.error("Package %s/%s appears to be corrupt.  Please remove it and re-download it" % (subdir, fn))
             return None, None, None, None
+        except IOError:
+            # file has been removed
+            return None, None, None, None
 
         # calculate extra stuff to add to index.json cache, size, md5, sha256
         stat_result = os.stat(tar_path)
@@ -1072,7 +1079,7 @@ class ChannelIndex(object):
             try:
                 with open(path) as fh:
                     data.update(json.load(fh))
-            except (OSError, EOFError):
+            except (OSError, EOFError, IOError):
                 pass
 
         icon_cache_paths = glob(icon_cache_path_glob)
