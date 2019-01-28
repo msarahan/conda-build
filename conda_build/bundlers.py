@@ -5,16 +5,12 @@ import io
 import json
 import os
 import re
-import stat
-import subprocess
 import sys
-from tempfile import NamedTemporaryFile
-import zipfile
 
-import libarchive
 from bs4 import UnicodeDammit
 import yaml
 from conda import __version__ as conda_version
+from conda_package_handling import api as cph
 
 from conda_build.conda_interface import prefix_placeholder
 from conda_build.conda_interface import PY3
@@ -805,48 +801,30 @@ def _verify_artifacts(metadata, tmp_archive_paths):
                             "Legacy noarch packages are known to fail.  Full message was {}".format(e))
 
 
+def _bundle_conda_impl(output, metadata, env, stats, ext, **kw):
+    basename = metadata.dist()
+    final_outputs = []
+    pkg_fn = basename + ext
+    file_list = _get_conda_package_file_list(output, metadata, env, stats, **kw)
+    tmpdir = kw.get('tmpdir', TemporaryDirectory())
+    cph.create(prefix=metadata.config.host_prefix, file_list=file_list,
+               out_fn=pkg_fn, out_folder=tmpdir.name)
+    tmp_archives = [os.path.join(tmpdir, basename + '.tar.bz2')]
+    _verify_artifacts(metadata, tmp_archives)
+    final_outputs = _move_artifacts_to_output_dir(metadata, tmp_archives)
+    return final_outputs
+
+
 def bundle_conda_tarball(output, metadata, env, stats, **kw):
     """The 'old' conda format, .tar.bz2 files, where metadata is in the info folder inside the .tar.bz2.
     Also repurposed to produce the inner compressed container for the 'new' conda format"""
-    basename = metadata.dist()
-    tmp_archives = []
-    final_outputs = []
-    file_list = _get_conda_package_file_list(output, metadata, env, stats, **kw)
-
-    if not hasattr(file_list, 'keys'):
-        file_list = {basename: file_list}
-    tmpdir = kw.get('tmpdir', TemporaryDirectory())
-    ext, compression_filter, filter_opts = kw.get('compression_tuple', ('.tar.bz2', 'bzip2', ''))
-    for k, flist in file_list.items():
-        tmp_archives.append(_create_compressed_tarball(metadata.config.host_prefix, flist,
-                                                       tmpdir.name, k, ext, compression_filter,
-                                                       filter_opts))
-    if not kw.get('new_pkg_split'):
-        _verify_artifacts(metadata, tmp_archives)
-        final_outputs = _move_artifacts_to_output_dir(metadata, tmp_archives)
-    return final_outputs or tmp_archives
+    return _bundle_conda_impl(output, metadata, env, stats, ".tar.bz2", **kw)
 
 
 def bundle_conda(output, metadata, env, stats, **kw):
     """The 'new' conda format, introduced in late 2018/early 2019.  Spec at
     https://anaconda.atlassian.net/wiki/spaces/AD/pages/90210540/Conda+package+format+v2"""
-    basename = metadata.dist()
-    tmp = TemporaryDirectory()
-    conda_pkg_fn = os.path.join(tmp.name, basename) + '.conda'
-    internal_pkgs = bundle_conda_tarball(output, metadata, env, stats,
-                                            tmpdir=tmp,
-                                            new_pkg_split=True,
-                                            compression_tuple=metadata.config.compression_tuple)
-    _write_conda_pkg_version_spec(tmp.name)
-
-    with utils.tmp_chdir(tmp.name):
-        with zipfile.ZipFile(conda_pkg_fn, 'w', compression=zipfile.ZIP_STORED) as zf:
-            for pkg in internal_pkgs:
-                zf.write(os.path.basename(pkg))
-            zf.write('metadata.json')
-    _verify_artifacts(metadata, conda_pkg_fn)
-    final_outputs = _move_artifacts_to_output_dir(metadata, conda_pkg_fn)
-    return final_outputs
+    return _bundle_conda_impl(output, metadata, env, stats, ".conda", **kw)
 
 
 def bundle_wheel(output, metadata, env, stats):

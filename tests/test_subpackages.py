@@ -357,3 +357,4 @@ def test_conda_pkg_v2_format(testing_config):
 
     out_files = api.build(recipe, config=testing_config)
     assert len(out_files) == 1
+    assert out_files[0].endswith('.conda'), out_files[0]

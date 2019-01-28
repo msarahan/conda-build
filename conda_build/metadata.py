@@ -679,6 +679,8 @@ def get_output_dicts_from_metadata(metadata, outputs=None):
     for out in outputs:
         if 'package:' in metadata.get_recipe_text() and out.get('name') == metadata.name():
             combine_top_level_metadata_with_output(metadata, out)
+        if 'name' not in out:
+            out['name'] = metadata.name()
     return outputs
 
 
@@ -1839,7 +1841,10 @@ class MetaData(object):
 
     def get_output_metadata(self, output):
         if output.get('name') == self.name():
-            output_metadata = self
+            output_metadata = self.copy()
+            output_metadata.type = output.get('type', 'conda_v2' if self.config.conda_pkg_format == "2" else
+                                              'conda')
+
         else:
             output_metadata = self.copy()
             output_reqs = utils.expand_reqs(output.get('requirements', {}))
