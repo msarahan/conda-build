@@ -41,7 +41,7 @@ from .conda_interface import memoized
 from .conda_interface import StringIO
 from .conda_interface import VersionOrder, MatchSpec
 from .conda_interface import cc_conda_build
-from .conda_interface import conda_43, Dist
+from .conda_interface import conda_43, conda_46, Dist
 from .conda_interface import context
 # NOQA because it is not used in this file.
 from conda_build.conda_interface import rm_rf as _rm_rf # NOQA
@@ -1765,3 +1765,220 @@ def sha256_checksum(filename, buffersize=65536):
         for block in iter(lambda: f.read(buffersize), b''):
             sha256.update(block)
     return sha256.hexdigest()
+
+
+def seconds_to_text(secs):
+    m, s = divmod(secs, 60)
+    h, m = divmod(int(m), 60)
+    return "{:d}:{:02d}:{:04.1f}".format(h, m, s)
+
+
+def log_stats(stats_dict, descriptor):
+    print("\nResource usage statistics from {}:".format(descriptor))
+    print("   Process count: {}".format(stats_dict.get('processes', 1)))
+
+    if stats_dict.get('cpu_sys'):
+        print("   CPU time: Sys={}, User={}".format(seconds_to_text(stats_dict.get('cpu_sys', 0)),
+                                                    seconds_to_text(stats_dict.get('cpu_user', 0))))
+    else:
+        print("   CPU time: unavailable")
+
+    if stats_dict.get('rss'):
+        print("   Memory: {}".format(bytes2human(stats_dict.get('rss', 0))))
+    else:
+        print("   Memory: unavailable")
+
+    print("   Disk usage: {}".format(bytes2human(stats_dict['disk'])))
+    print("   Time elapsed: {}\n".format(seconds_to_text(stats_dict['elapsed'])))
+
+
+def stats_key(metadata, desc):
+    # get the build string from whatever conda-build makes of the configuration
+    used_loop_vars = metadata.get_used_loop_vars()
+    build_vars = '-'.join([k + '_' + str(metadata.config.variant[k]) for k in used_loop_vars
+                          if k != 'target_platform'])
+    # kind of a special case.  Target platform determines a lot of output behavior, but may not be
+    #    explicitly listed in the recipe.
+    tp = metadata.config.variant.get('target_platform')
+    if tp and tp != metadata.config.subdir and 'target_platform' not in build_vars:
+        build_vars += '-target_' + tp
+    key = [metadata.name(), metadata.version()]
+    if build_vars:
+        key.append(build_vars)
+    key = "-".join(key)
+    key = desc + key
+    return key
+
+
+def _write_sh_activation_text(file_handle, m):
+    cygpath_prefix = "$(cygpath -u " if on_win else ""
+    cygpath_suffix = " )" if on_win else ""
+    activate_path = ''.join((cygpath_prefix,
+                            os.path.join(root_script_dir, 'activate').replace('\\', '\\\\'),
+                            cygpath_suffix))
+
+    if conda_46:
+        file_handle.write("eval \"$('{sys_python}' -m conda shell.bash hook)\"\n".format(
+            sys_python=sys.executable,
+        ))
+
+    if m.is_cross:
+        # HACK: we need both build and host envs "active" - i.e. on PATH,
+        #     and with their activate.d scripts sourced. Conda only
+        #     lets us activate one, though. This is a
+        #     vile hack to trick conda into "stacking"
+        #     two environments.
+        #
+        # Net effect: binaries come from host first, then build
+        #
+        # Conda 4.4 may break this by reworking the activate scripts.
+        #  ^^ shouldn't be true
+        # In conda 4.4, export CONDA_MAX_SHLVL=2 to stack envs to two
+        #   levels deep.
+        # conda 4.4 does require that a conda-meta/history file
+        #   exists to identify a valid conda environment
+        # conda 4.6 changes this one final time, by adding a '--stack' flag to the 'activate'
+        #   command, and 'activate' does not stack environments by default without that flag
+        history_file = os.path.join(m.config.host_prefix, 'conda-meta', 'history')
+        if not os.path.isfile(history_file):
+            if not os.path.isdir(os.path.dirname(history_file)):
+                os.makedirs(os.path.dirname(history_file))
+            open(history_file, 'a').close()
+        host_prefix_path = ''.join((cygpath_prefix,
+                                   m.config.host_prefix.replace('\\', '\\\\'),
+                                   cygpath_suffix))
+        if conda_46:
+            file_handle.write("conda activate \"{0}\"\n".format(host_prefix_path))
+        else:
+            file_handle.write('source "{0}" "{1}"\n' .format(activate_path, host_prefix_path))
+            file_handle.write('unset CONDA_PATH_BACKUP\n')
+            file_handle.write('export CONDA_MAX_SHLVL=2\n')
+
+    # Write build prefix activation AFTER host prefix, so that its executables come first
+    build_prefix_path = ''.join((cygpath_prefix,
+                                m.config.build_prefix.replace('\\', '\\\\'),
+                                cygpath_suffix))
+
+    if conda_46:
+        file_handle.write("conda activate --stack \"{0}\"\n".format(build_prefix_path))
+    else:
+        file_handle.write('source "{0}" "{1}"\n'.format(activate_path, build_prefix_path))
+
+    # conda 4.4 requires a conda-meta/history file for a valid conda prefix
+    history_file = os.path.join(m.config.build_prefix, 'conda-meta', 'history')
+    if not os.path.isfile(history_file):
+        if not os.path.isdir(os.path.dirname(history_file)):
+            os.makedirs(os.path.dirname(history_file))
+        open(history_file, 'a').close()
+
+
+def _write_bat_activation_text(file_handle, m):
+    if m.is_cross:
+        # HACK: we need both build and host envs "active" - i.e. on PATH,
+        #     and with their activate.d scripts sourced. Conda only
+        #     lets us activate one, though. This is a
+        #     vile hack to trick conda into "stacking"
+        #     two environments.
+        #
+        # Net effect: binaries come from host first, then build
+        #
+        # Conda 4.4 may break this by reworking the activate scripts.
+        #  ^^ shouldn't be true
+        # In conda 4.4, export CONDA_MAX_SHLVL=2 to stack envs to two
+        #   levels deep.
+        # conda 4.4 does require that a conda-meta/history file
+        #   exists to identify a valid conda environment
+        # conda 4.6 changes this one final time, by adding a '--stack' flag to the 'activate'
+        #   command, and 'activate' does not stack environments by default without that flag
+        history_file = join(m.config.host_prefix, 'conda-meta', 'history')
+        if not isfile(history_file):
+            if not isdir(dirname(history_file)):
+                os.makedirs(dirname(history_file))
+            open(history_file, 'a').close()
+
+        if conda_46:
+            file_handle.write('call "{conda_root}\\..\\condabin\\conda.bat" activate "{prefix}"\n'.format(
+                conda_root=root_script_dir,
+                prefix=m.config.host_prefix,
+            ))
+        else:
+            file_handle.write('call "{conda_root}\\activate.bat" "{prefix}"\n'.format(
+                conda_root=root_script_dir,
+                prefix=m.config.host_prefix))
+            # removing this placeholder should make conda double-activate with conda 4.3
+            file_handle.write('set "PATH=%PATH:CONDA_PATH_PLACEHOLDER;=%"\n')
+            file_handle.write('set CONDA_MAX_SHLVL=2\n')
+
+    # Write build prefix activation AFTER host prefix, so that its executables come first
+    if conda_46:
+        file_handle.write('call "{conda_root}\\..\\condabin\\conda.bat" activate --stack "{prefix}"\n'.format(
+            conda_root=root_script_dir,
+            prefix=m.config.build_prefix,
+        ))
+    else:
+        file_handle.write('call "{conda_root}\\activate.bat" "{prefix}"\n'.format(
+            conda_root=root_script_dir,
+            prefix=m.config.build_prefix))
+
+
+def get_entry_point_script_names(entry_point_scripts):
+    scripts = []
+    for entry_point in entry_point_scripts:
+        cmd = entry_point[:entry_point.find("=")].strip()
+        if on_win:
+            scripts.append("Scripts\\%s-script.py" % cmd)
+            scripts.append("Scripts\\%s.exe" % cmd)
+        else:
+            scripts.append("bin/%s" % cmd)
+    return scripts
+
+
+def copy_test_source_files(m, destination):
+    src_dir = ''
+    if os.listdir(m.config.work_dir):
+        src_dir = m.config.work_dir
+    elif hasattr(m.config, 'recipe_dir') and m.config.recipe_dir:
+        src_dir = os.path.join(m.config.recipe_dir, 'info', 'test')
+
+    src_dirs = [src_dir]
+    if os.path.isdir(os.path.join(src_dir, 'parent')):
+        src_dirs.append(os.path.join(src_dir, 'parent'))
+
+    for src_dir in src_dirs:
+        if src_dir and os.path.isdir(src_dir) and src_dir != destination:
+            for pattern in ensure_list(m.get_value('test/source_files', [])):
+                if on_win and '\\' in pattern:
+                    raise RuntimeError("test/source_files paths must use / "
+                                        "as the path delimiter on Windows")
+                files = glob(os.path.join(src_dir, pattern))
+                if not files:
+                    msg = "Did not find any source_files for test with pattern {0}"
+                    raise RuntimeError(msg.format(pattern))
+                for f in files:
+                    try:
+                        # disable locking to avoid locking a temporary directory (the extracted
+                        #     test folder)
+                        copy_into(f, f.replace(src_dir, destination), m.config.timeout,
+                                locking=False, clobber=True)
+                    except OSError as e:
+                        log = get_logger(__name__)
+                        log.warn("Failed to copy {0} into test files.  Error was: {1}".format(f,
+                                                                                            str(e)))
+                for ext in '.pyc', '.pyo':
+                    for f in get_ext_files(destination, ext):
+                        os.remove(f)
+
+    recipe_test_files = m.get_value('test/files')
+    if recipe_test_files:
+        orig_recipe_dir = m.path
+        for pattern in recipe_test_files:
+            files = glob(os.path.join(orig_recipe_dir, pattern))
+            for f in files:
+                basedir = orig_recipe_dir
+                if not os.path.isfile(f):
+                    basedir = os.path.join(orig_recipe_dir, 'parent')
+                dest = f.replace(basedir, destination)
+                if f != dest:
+                    copy_into(f, f.replace(basedir, destination),
+                              timeout=m.config.timeout, locking=m.config.locking,
+                              clobber=True)
