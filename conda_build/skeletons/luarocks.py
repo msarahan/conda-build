@@ -219,7 +219,7 @@ def ensure_base_deps(deps):
     return deps
 
 
-def skeletonize(packages, output_dir=".", version=None, recursive=False):
+def skeletonize(packages, output_dir=".", version=None, recursive=False, config=None, platform=None):
 
     # Check that we have Lua installed (any version)
 

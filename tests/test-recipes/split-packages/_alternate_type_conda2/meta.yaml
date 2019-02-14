@@ -1,0 +1,10 @@
+package:
+  name: split_packages_alternate_type_conda_v2
+  version: 1.0
+
+outputs:
+  - type: conda_v2
+    build:
+      script:
+        - echo "testfile" > $PREFIX/testfile  # [unix]
+        - echo "testfile" > %PREFIX%\testfile  # [win]
