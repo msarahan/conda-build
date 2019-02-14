@@ -1873,10 +1873,6 @@ def _write_sh_activation_text(file_handle, m):
 
 
 def _write_bat_activation_text(file_handle, m):
-    if conda_46:
-        file_handle.write('call "{conda_root}\\condacmd\\conda_hook.bat"\n'.format(
-            conda_root=root_script_dir,
-        ))
     if m.is_cross:
         # HACK: we need both build and host envs "active" - i.e. on PATH,
         #     and with their activate.d scripts sourced. Conda only
@@ -1901,7 +1897,8 @@ def _write_bat_activation_text(file_handle, m):
             open(history_file, 'a').close()
 
         if conda_46:
-            file_handle.write('conda activate "{prefix}"\n'.format(
+            file_handle.write('call "{conda_root}\\..\\condabin\\conda.bat" activate "{prefix}"\n'.format(
+                conda_root=root_script_dir,
                 prefix=m.config.host_prefix,
             ))
         else:
@@ -1914,7 +1911,8 @@ def _write_bat_activation_text(file_handle, m):
 
     # Write build prefix activation AFTER host prefix, so that its executables come first
     if conda_46:
-        file_handle.write('conda activate --stack "{prefix}"\n'.format(
+        file_handle.write('call "{conda_root}\\..\\condabin\\conda.bat" activate --stack "{prefix}"\n'.format(
+            conda_root=root_script_dir,
             prefix=m.config.build_prefix,
         ))
     else:
