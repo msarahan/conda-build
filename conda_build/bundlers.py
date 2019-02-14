@@ -970,8 +970,8 @@ def _bundle_conda_impl(output, metadata, env, stats, ext, **kw):
     cph.create(prefix=metadata.config.host_prefix, file_list=file_list,
                out_fn=pkg_fn, out_folder=tmpdir_name)
     tmp_archives = [os.path.join(tmpdir_name, pkg_fn)]
-        _verify_artifacts(metadata, tmp_archives)
-        final_outputs = _move_artifacts_to_output_dir(metadata, tmp_archives)
+    _verify_artifacts(metadata, tmp_archives)
+    final_outputs = _move_artifacts_to_output_dir(metadata, tmp_archives)
     return final_outputs
 
 

@@ -60,7 +60,11 @@ from .conda_interface import pkgs_dirs
 from .utils import env_var, tmp_chdir
 
 from conda_build import __version__
-from conda_build import environ, source, tarcheck, utils
+from conda_build import bundlers
+from conda_build import environ
+from conda_build import source
+from conda_build import tarcheck
+from conda_build import utils
 from conda_build.index import get_build_index, update_index
 from conda_build.render import (output_yaml, bldpkg_path, render_recipe, reparse, finalize_metadata,
                                 distribute_variants, expand_outputs, try_download,
