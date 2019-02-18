@@ -788,6 +788,10 @@ def _get_conda_package_file_list(output, metadata, env, stats, **kw):
     elif files:
         # Files is specified by the output
         # we exclude the list of files that we want to keep, so post-process picks them up as "new"
+        # filter pyc files because we regenerate them
+        files = utils.filter_files(files, metadata.config.host_prefix, [".*\.pyc",
+                                                                        ".*\.trash",
+                                                                        ".*\.conda_trash*"])
         keep_files = set(os.path.normpath(pth)
                          for pth in utils.expand_globs(files, metadata.config.host_prefix))
         pfx_files = set(utils.prefix_files(metadata.config.host_prefix))

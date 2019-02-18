@@ -384,9 +384,9 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
                                             cwd=src_dir, stats=build_stats)
                         utils.remove_pycache_from_scripts(m.config.host_prefix)
             if build_stats and not provision_only:
-                log_stats(build_stats, "building {}".format(m.name()))
+                utils.log_stats(build_stats, "building {}".format(m.name()))
                 if stats is not None:
-                    stats[stats_key(m, 'build')] = build_stats
+                    stats[utils.stats_key(m, 'build')] = build_stats
 
     prefix_file_list = join(m.config.build_folder, 'prefix_files.txt')
     initial_files = set()
@@ -439,8 +439,7 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
 
                 if (top_level_meta.name() == output_d.get('name') and not (output_d.get('files') or
                                                                            output_d.get('script'))):
-                    output_d['files'] = (utils.prefix_files(prefix=m.config.host_prefix) -
-                                         initial_files)
+                    output_d['files'] = new_prefix_files
 
                 # ensure that packaging scripts are copied over into the workdir
                 if 'script' in output_d:
@@ -464,7 +463,7 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
                     # for more than one output, we clear and rebuild the environment before each
                     #    package.  We also do this for single outputs that present their own
                     #    build reqs.
-                    if not (m.is_output or
+                    if not (m.is_output or m.other_outputs or
                             (os.path.isdir(m.config.host_prefix) and
                              len(os.listdir(m.config.host_prefix)) <= 1)):
                         log.debug('Not creating new env for output - already exists from top-level')
@@ -924,7 +923,7 @@ def test(recipedir_or_package_or_metadata, config, stats, move_broken=True, prov
     if not in_pkg_cache:
         environ.clean_pkg_cache(metadata.dist(), metadata.config)
 
-    copy_test_source_files(metadata, metadata.config.test_dir)
+    utils.copy_test_source_files(metadata, metadata.config.test_dir)
     # this is also copying tests/source_files from work_dir to testing workdir
 
     _, pl_files, py_files, r_files, lua_files, shell_files = create_all_test_files(metadata)
