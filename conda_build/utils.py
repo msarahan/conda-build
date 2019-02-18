@@ -1404,34 +1404,36 @@ def filter_info_files(files_list, prefix):
 
 
 def rm_rf(path, config=None):
-    if os.path.isdir(path):
-        try:
-            # subprocessing to delete large folders can be quite a bit faster
-            if on_win:
-                subprocess.check_call('rd /s /q {}'.format(path), shell=True)
-            else:
-                try:
-                    os.makedirs('.empty')
-                except:
-                    pass
-                del_dir_cmd = 'rsync -a --delete .empty {}/'
-                subprocess.check_call(del_dir_cmd.format(path).split())
-                try:
-                    shutil.rmtree('.empty')
-                except:
-                    pass
-        # we don't really care about errors that much. People can and should
-        #     clean out their folders once in a while with "purge"
-        except:
-            pass
-
-    conda_log_level = logging.WARN
-    if config and config.debug:
-        conda_log_level = logging.DEBUG
-    with LoggingContext(conda_log_level):
-        # this clears out the path from conda's cache, which otherwise thinks
-        #    that things are still installed here
+    if conda_46:
         _rm_rf(path)
+    else:
+        if os.path.isdir(path):
+            try:
+                # subprocessing to delete large folders can be quite a bit faster
+                if on_win:
+                    subprocess.check_call('rd /s /q {}'.format(path), shell=True)
+                else:
+                    try:
+                        os.makedirs('.empty')
+                    except:
+                        pass
+                    del_dir_cmd = 'rsync -a --delete .empty {}/'
+                    subprocess.check_call(del_dir_cmd.format(path).split())
+                    try:
+                        shutil.rmtree('.empty')
+                    except:
+                        pass
+            # we don't really care about errors that much. People can and should
+            #     clean out their folders once in a while with "purge"
+            except:
+                pass
+        conda_log_level = logging.WARN
+        if config and config.debug:
+            conda_log_level = logging.DEBUG
+        with LoggingContext(conda_log_level):
+            # this clears out the path from conda's cache, which otherwise thinks
+            #    that things are still installed here
+            _rm_rf(path)
 
 
 # https://stackoverflow.com/a/31459386/1170370
