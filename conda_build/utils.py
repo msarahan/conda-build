@@ -1134,7 +1134,9 @@ def expand_globs(path_list, root_dir):
             glob_files = glob(path)
             if not glob_files:
                 log = get_logger(__name__)
+                # import ipdb; ipdb.set_trace()
                 log.error('Glob {} did not match in root_dir {}'.format(path, root_dir))
+                sys.exit(1)
             files.extend(glob_files)
     prefix_path_re = re.compile('^' + re.escape('%s%s' % (root_dir, os.path.sep)))
     files = [prefix_path_re.sub('', f, 1) for f in files]
@@ -1986,3 +1988,14 @@ def copy_test_source_files(m, destination):
                     copy_into(f, f.replace(basedir, destination),
                               timeout=m.config.timeout, locking=m.config.locking,
                               clobber=True)
+
+
+def collect_prefix_files(prefix):
+    """Iterate over JSON files in the prefix to establish what's pre-existing"""
+    json_files = glob(os.path.join(prefix, 'conda-meta', '*.json'))
+    paths = set()
+    for jf in json_files:
+        with open(jf) as f:
+            data = json.load(f)
+            paths.update(set(entry['_path'] for entry in data.get('paths_data', {}).get('paths', [])))
+    return paths

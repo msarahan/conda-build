@@ -206,7 +206,7 @@ def _get_short_path(m, target_file):
 
 def _is_no_link(no_link, short_path):
     no_link = utils.ensure_list(no_link)
-    if any(fnmatch.fnmatch(short_path, p) for p in no_link):
+    if any(fnmatch(short_path, p) for p in no_link):
         return True
 
 
@@ -390,7 +390,7 @@ def _write_no_link(m, files):
             no_link = [no_link]
         with open(os.path.join(m.config.info_dir, 'no_link'), 'w') as fo:
             for f in files:
-                if any(fnmatch.fnmatch(f, p) for p in no_link):
+                if any(fnmatch(f, p) for p in no_link):
                     fo.write(f + '\n')
 
 
@@ -789,11 +789,12 @@ def _get_conda_package_file_list(output, metadata, env, stats, **kw):
         # Files is specified by the output
         # we exclude the list of files that we want to keep, so post-process picks them up as "new"
         # filter pyc files because we regenerate them
-        files = utils.filter_files(files, metadata.config.host_prefix, [".*\.pyc",
-                                                                        ".*\.trash",
-                                                                        ".*\.conda_trash*"])
         keep_files = set(os.path.normpath(pth)
                          for pth in utils.expand_globs(files, metadata.config.host_prefix))
+        keep_files = set(utils.filter_files(keep_files, metadata.config.host_prefix,
+                                            [r".*\.pyc",
+                                             r".*\.trash",
+                                             r".*\.conda_trash"]))
         pfx_files = set(utils.prefix_files(metadata.config.host_prefix))
         initial_files = set(item for item in (pfx_files - keep_files)
                             if not any(keep_file.startswith(item + os.path.sep)
@@ -969,6 +970,7 @@ def _bundle_conda_impl(output, metadata, env, stats, ext, **kw):
     final_outputs = []
     pkg_fn = basename + ext
     file_list = _get_conda_package_file_list(output, metadata, env, stats, **kw)
+
     tmpdir = kw.get('tmpdir', TemporaryDirectory())
     tmpdir_name = tmpdir.name if hasattr(tmpdir, 'name') else tmpdir
     cph.create(prefix=metadata.config.host_prefix, file_list=file_list,

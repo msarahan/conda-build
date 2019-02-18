@@ -330,7 +330,7 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
             os.makedirs(src_dir)
 
         utils.rm_rf(m.config.info_dir)
-        files1 = utils.prefix_files(prefix=m.config.host_prefix)
+        files1 = utils.collect_prefix_files(m.config.host_prefix)
         with open(join(m.config.build_folder, 'prefix_files.txt'), 'w') as f:
             f.write(u'\n'.join(sorted(list(files1))))
             f.write(u'\n')
@@ -437,10 +437,6 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
                     new_pkgs[bldpkg_path(m)] = output_d, m
                     continue
 
-                if (top_level_meta.name() == output_d.get('name') and not (output_d.get('files') or
-                                                                           output_d.get('script'))):
-                    output_d['files'] = new_prefix_files
-
                 # ensure that packaging scripts are copied over into the workdir
                 if 'script' in output_d:
                     utils.copy_into(os.path.join(m.path, output_d['script']), m.config.work_dir)
@@ -525,6 +521,10 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
                         utils.copy_into(os.path.join(prefix_files_backup, f),
                                         os.path.join(m.config.host_prefix, f),
                                         symlinks=True)
+
+                    if (top_level_meta.name() == output_d.get('name') and not (
+                            output_d.get('files') or output_d.get('script'))):
+                        output_d['files'] = new_prefix_files - utils.collect_prefix_files(m.config.host_prefix)
 
                     # we must refresh the environment variables because our env for each package
                     #    can be different from the env for the top level build.
