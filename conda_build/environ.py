@@ -22,6 +22,7 @@ from .conda_interface import memoized
 from .conda_interface import package_cache, TemporaryDirectory
 from .conda_interface import pkgs_dirs, root_dir, symlink_conda, create_default_packages
 from .conda_interface import reset_context
+from .conda_interface import conda_46
 
 from conda_build import utils
 from conda_build.exceptions import BuildLockError, DependencyNeedsBuildingError
@@ -941,7 +942,8 @@ def create_env(prefix, specs_or_actions, env, config, subdir, clear_cache=True, 
             shell = "cmd.exe"
         else:
             shell = "bash"
-        symlink_conda(prefix, sys.prefix, shell)
+        if not conda_46:
+            symlink_conda(prefix, sys.prefix, shell)
 
 
 def get_pkg_dirs_locks(dirs, config):

@@ -1990,12 +1990,23 @@ def copy_test_source_files(m, destination):
                               clobber=True)
 
 
+JSON_FILE_CACHE = {}
+
+
 def collect_prefix_files(prefix):
     """Iterate over JSON files in the prefix to establish what's pre-existing"""
+    global JSON_FILE_CACHE
     json_files = glob(os.path.join(prefix, 'conda-meta', '*.json'))
     paths = set()
     for jf in json_files:
-        with open(jf) as f:
-            data = json.load(f)
-            paths.update(set(entry['_path'] for entry in data.get('paths_data', {}).get('paths', [])))
+        fn = os.path.basename(jf)
+        cached_paths = JSON_FILE_CACHE.get('fn')
+        if cached_paths:
+            paths.update(cached_paths)
+        else:
+            with open(jf) as f:
+                data = json.load(f)
+            pkg_paths = set(entry['_path'] for entry in data.get('paths_data', {}).get('paths', []))
+            JSON_FILE_CACHE[fn] = pkg_paths
+            paths.update(pkg_paths)
     return paths

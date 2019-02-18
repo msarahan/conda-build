@@ -5,7 +5,10 @@ import io
 import json
 import os
 import re
+import stat
+import subprocess
 import sys
+from tempfile import NamedTemporaryFile
 
 from bs4 import UnicodeDammit
 import yaml
@@ -897,22 +900,6 @@ def _sort_file_order(prefix, files):
     else:
         files_list = list(f for f in sorted(files, key=order))
     return files_list
-
-
-def _create_compressed_tarball(prefix, files, tmpdir, basename, ext, compression_filter, filter_opts=''):
-    tmp_path = os.path.join(tmpdir, basename)
-    files = _sort_file_order(prefix, files)
-
-    # add files in order of a) in info directory, b) increasing size so
-    # we can access small manifest or json files without decompressing
-    # possible large binary or data files
-    fullpath = tmp_path + ext
-    print("Compressing to {}".format(fullpath))
-    with utils.tmp_chdir(prefix):
-        with libarchive.file_writer(fullpath, 'gnutar', filter_name=compression_filter,
-                                    options=filter_opts) as archive:
-            archive.add_files(*files)
-    return fullpath
 
 
 def _verify_artifacts(metadata, tmp_archive_paths):

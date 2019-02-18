@@ -4,31 +4,23 @@ Module that does most of the heavy lifting for the ``conda build`` command.
 from __future__ import absolute_import, division, print_function
 
 from collections import deque, OrderedDict
-import fnmatch
 from glob import glob
-import io
 import json
-import libarchive
 import os
-from os.path import isdir, isfile, islink, join, dirname
+from os.path import isdir, isfile, join
 import random
 import re
 import shutil
-import stat
 import string
 import subprocess
 import sys
 import time
-from tempfile import NamedTemporaryFile
 
 # this is to compensate for a requests idna encoding error.  Conda is a better place to fix,
 #   eventually
 # exception is raises: "LookupError: unknown encoding: idna"
 #    http://stackoverflow.com/a/13057751/1170370
 import encodings.idna  # NOQA
-
-from bs4 import UnicodeDammit
-import yaml
 
 try:
     from conda.base.constants import CONDA_TARBALL_EXTENSIONS
@@ -37,19 +29,11 @@ except Exception:
     CONDA_TARBALL_EXTENSIONS = (CONDA_TARBALL_EXTENSION,)
 
 # used to get version
-from .conda_interface import env_path_backup_var_exists, conda_45, conda_46
-from .conda_interface import PY3
-from .conda_interface import prefix_placeholder
+from .conda_interface import env_path_backup_var_exists, conda_45
 from .conda_interface import TemporaryDirectory
 from .conda_interface import VersionOrder
-from .conda_interface import text_type
-from .conda_interface import CrossPlatformStLink
-from .conda_interface import PathType, FileMode
-from .conda_interface import EntityEncoder
 from .conda_interface import get_rc_urls
 from .conda_interface import url_path
-from .conda_interface import root_dir
-from .conda_interface import conda_private
 from .conda_interface import MatchSpec
 from .conda_interface import reset_context
 from .conda_interface import context
@@ -57,32 +41,26 @@ from .conda_interface import UnsatisfiableError
 from .conda_interface import NoPackagesFoundError
 from .conda_interface import CondaError
 from .conda_interface import pkgs_dirs
-from .utils import env_var, tmp_chdir
+from .utils import env_var
 
-from conda_build import __version__
 from conda_build import bundlers
 from conda_build import environ
-from conda_build import source
-from conda_build import tarcheck
 from conda_build import utils
 from conda_build.index import get_build_index, update_index
-from conda_build.render import (output_yaml, bldpkg_path, render_recipe, reparse, finalize_metadata,
+from conda_build.render import (bldpkg_path, render_recipe, reparse, finalize_metadata,
                                 distribute_variants, expand_outputs, try_download,
                                 add_upstream_pins, execute_download_actions)
 import conda_build.os_utils.external as external
-from conda_build.metadata import FIELDS, MetaData, default_structs
-from conda_build.post import (post_process, post_build,
-                              fix_permissions, get_build_metadata)
+from conda_build.metadata import MetaData
+from conda_build.post import get_build_metadata
 
-from conda_build.exceptions import indent, DependencyNeedsBuildingError, CondaBuildException
+from conda_build.exceptions import DependencyNeedsBuildingError, CondaBuildException
 from conda_build.variants import (set_language_env_vars, dict_of_lists_to_list_of_dicts,
                                   get_package_variants)
 from conda_build.create_test import create_all_test_files
 
-import conda_build.noarch_python as noarch_python
 
 from conda import __version__ as conda_version
-from conda_build import __version__ as conda_build_version
 
 if sys.platform == 'win32':
     import conda_build.windows as windows
@@ -774,7 +752,7 @@ def write_build_scripts(m, script, build_file):
                 bf.write('export {0}="{1}"\n'.format(k, v))
 
         if m.activate_build_script:
-            _write_sh_activation_text(bf, m)
+            utils._write_sh_activation_text(bf, m)
     with open(work_file, 'w') as bf:
         # bf.write('set -ex\n')
         bf.write('if [ -z ${CONDA_BUILD+x} ]; then\n')
