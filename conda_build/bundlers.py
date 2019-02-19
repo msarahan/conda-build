@@ -739,6 +739,7 @@ def _get_conda_package_file_list(output, metadata, env, stats, **kw):
     is_output = 'package:' not in metadata.get_recipe_text()
     top_build = metadata.get_top_level_recipe_without_outputs().get('build', {}) or {}
     activate_script = metadata.activate_build_script
+
     if (script and not output.get('script')) and (is_output or not top_build.get('script')):
         # do add in activation, but only if it's not disabled
         activate_script = metadata.config.activate
@@ -794,10 +795,6 @@ def _get_conda_package_file_list(output, metadata, env, stats, **kw):
         # filter pyc files because we regenerate them
         keep_files = set(os.path.normpath(pth)
                          for pth in utils.expand_globs(files, metadata.config.host_prefix))
-        keep_files = set(utils.filter_files(keep_files, metadata.config.host_prefix,
-                                            [r".*\.pyc",
-                                             r".*\.trash",
-                                             r".*\.conda_trash"]))
         pfx_files = set(utils.prefix_files(metadata.config.host_prefix))
         initial_files = set(item for item in (pfx_files - keep_files)
                             if not any(keep_file.startswith(item + os.path.sep)

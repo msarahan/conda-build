@@ -437,7 +437,7 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
                     # for more than one output, we clear and rebuild the environment before each
                     #    package.  We also do this for single outputs that present their own
                     #    build reqs.
-                    if not (m.is_output or m.other_outputs or
+                    if not (m.is_output or len(m.other_outputs) > 1 or
                             (os.path.isdir(m.config.host_prefix) and
                              len(os.listdir(m.config.host_prefix)) <= 1)):
                         log.debug('Not creating new env for output - already exists from top-level')
@@ -502,7 +502,13 @@ def build(m, stats, post=None, need_source_download=True, need_reparse_in_env=Fa
 
                     if (top_level_meta.name() == output_d.get('name') and not (
                             output_d.get('files') or output_d.get('script'))):
-                        output_d['files'] = new_prefix_files - utils.collect_prefix_files(m.config.host_prefix)
+                        files = new_prefix_files - utils.collect_prefix_files(m.config.host_prefix)
+                        files = set(utils.filter_files(files, m.config.host_prefix,
+                                                            [r".*\.pyc",
+                                                            r"conda-meta",
+                                                            r".*\.trash",
+                                                            r".*\.conda_trash"]))
+                        output_d['files'] = files
 
                     # we must refresh the environment variables because our env for each package
                     #    can be different from the env for the top level build.
